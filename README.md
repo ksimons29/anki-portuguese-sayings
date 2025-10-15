@@ -1,20 +1,42 @@
-cd ~/anki-tools
-cat > README.md <<'EOF'
-# 🇵🇹 Anki Portuguese Sayings Generator (pt-PT)
+# Anki Portuguese Automation
 
-Generate two-way Anki decks from CSV with built-in TTS (no mp3).  
-Schema (fixed order): `date_added,word_pt,word_en,sentence_pt,sentence_en`.
+End-to-end workflow to capture vocabulary on iPhone → iCloud inbox → GPT sentence generation → auto-import to Anki via AnkiConnect.
 
-## Usage
-./import_all.sh
+**Deck:** Portuguese (pt-PT)  
+**Model:** GPT Vocabulary Automater (fields: word_en, word_pt, sentence_pt, sentence_en, date_added)
 
-The script builds `decks/Portuguese_ptPT.apkg`.  
-Templates include: `{{tts pt_PT voices=Joana:sentence_pt}}`.
+## Run manually
+```bash
+/Library/Frameworks/Python.framework/Versions/3.12/bin/python3 \
+  ~/anki-tools/transform_inbox_to_csv.py \
+  --deck "Portuguese (pt-PT)" --model "GPT Vocabulary Automater"
 
-## Layout
-anki-tools/
-├─ anki_from_csv_dual_audio.py
-├─ import_all.sh
-├─ data/ (CSV)
-└─ decks/ (.apkg output)
-EOF
+{"ts":"2025-10-16 09:30:00","src":"quick","entries":"word1, word2, word3"}
+
+anki-portuguese-automation/
+│
+├── README.md                     ← main documentation (you’ll write below)
+├── .gitignore                    ← to exclude secrets and logs
+├── requirements.txt              ← future Python deps (optional)
+│
+├── scripts/                      ← automation logic
+│   ├── transform_inbox_to_csv.py
+│   ├── run_pipeline.sh
+│   └── import_all.sh             ← (if still relevant)
+│
+├── config/
+│   ├── launchd/
+│   │   └── com.koossimons.anki.ptpt.plist
+│   └── examples/
+│       └── zshrc_snippet.txt
+│
+├── docs/
+│   ├── architecture-diagram.md
+│   ├── shortcuts-guide.md
+│   ├── troubleshooting.md
+│   └── changelog.md
+│
+└── samples/
+    ├── sample_log.txt
+    ├── sample_sayings.csv
+    └── sample_inbox.jsonl
