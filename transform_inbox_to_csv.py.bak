@@ -1,5 +1,4 @@
 from _openai_compat import compat_chat
-from _openai_compat import compat_chat
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import os, sys, json, csv, glob, datetime

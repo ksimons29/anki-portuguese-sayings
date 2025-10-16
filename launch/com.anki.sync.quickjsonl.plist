@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+ "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.anki.sync.quickjsonl</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Library/Frameworks/Python.framework/Versions/3.12/bin/python3</string>
+    <string>/Users/koossimons/anki-tools/transform_inbox_to_csv.py</string>
+    <string>--deck</string>
+    <string>Portuguese (pt-PT)</string>
+    <string>--model</string>
+    <string>GPT Vocabulary Automater</string>
+  </array>
+
+  <key>StartInterval</key>
+  <integer>43200</integer> <!-- Every 12 hours -->
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/anki_vocab_sync.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/anki_vocab_sync.err</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>OPENAI_API_KEY</key>
+    <string>sk-proj-y-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</string>
+  </dict>
+</dict>
+</plist>

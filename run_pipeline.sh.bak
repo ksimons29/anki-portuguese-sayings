@@ -1,60 +1,53 @@
 #!/bin/zsh
 set -euo pipefail
-set -o pipefail
 
 cd /Users/koossimons/anki-tools
 
 LOG_DIR="$HOME/Library/CloudStorage/iCloud Drive/Portuguese/Anki/logs"
 INBOX="$HOME/Library/CloudStorage/iCloud Drive/Portuguese/Anki/inbox"
 QUICK="$INBOX/quick.jsonl"
-PY="$PWD/.venv/bin/python"
+PY="/Library/Frameworks/Python.framework/Versions/3.12/bin/python3"   # matches your logs
 
 mkdir -p "$LOG_DIR" "$INBOX"
+
 echo "=== $(date) START ===" | tee -a "$LOG_DIR/autorun.out.log"
 
-# Make sure AnkiConnect is up (harmless if already open)
+# Make sure Anki (AnkiConnect) is available; safe if already running
 open -gj -a "Anki" || true
 sleep 2
 
-# Optional merger (does nothing if script missing)
+# Optional: merge extra *.json/*.jsonl into quick.jsonl (no error if absent)
 if [ -x ./merge_inbox.sh ]; then
   ./merge_inbox.sh | tee -a "$LOG_DIR/autorun.out.log" || true
 fi
 
-# Nothing to do?
-if [ ! -s "$QUICK" ]; then
+# If there's nothing to process, stop cleanly
+if [ ! -f "$QUICK" ] || ! [ -s "$QUICK" ]; then
   echo "No $QUICK to process" | tee -a "$LOG_DIR/autorun.out.log"
   echo "=== $(date) DONE (nothing) ===" | tee -a "$LOG_DIR/autorun.out.log"
   exit 0
 fi
 
-# Normalize Unicode (fix latin-1 issues like … — –)
-export PYTHONIOENCODING=UTF-8
-export LANG=en_US.UTF-8
-"$PY" ./sanitize_quick_jsonl.py "$QUICK" | tee -a "$LOG_DIR/autorun.out.log"
-
 echo "Last lines of $QUICK:" | tee -a "$LOG_DIR/autorun.out.log"
 tail -n 3 "$QUICK" | tee -a "$LOG_DIR/autorun.out.log"
 
+# Run transformer (this both enriches and uploads via AnkiConnect)
 TRANS_LOG="$LOG_DIR/transform.$(date +%Y%m%d-%H%M%S).log"
-
-# Run transformer; capture exit of first command in the pipe
 set +e
-"$PY" ./transform_inbox_to_csv.py | tee -a "$LOG_DIR/autorun.out.log" | tee "$TRANS_LOG"
-STATUS=${pipestatus[1]:-0}
+$PY ./transform_inbox_to_csv.py | tee -a "$LOG_DIR/autorun.out.log" | tee "$TRANS_LOG"
+STATUS=${PIPESTATUS[1]:-0}
 set -e
 
-# If transformer failed, keep input for retry
+# If the transformer printed an error or returned non-zero, don't archive
 if grep -q "ERROR transforming inbox" "$TRANS_LOG" || [ "$STATUS" -ne 0 ]; then
   echo "Transformer failed; leaving $QUICK in place for retry" | tee -a "$LOG_DIR/autorun.out.log"
   echo "=== $(date) DONE (error) ===" | tee -a "$LOG_DIR/autorun.out.log"
   exit 1
 fi
 
-# Success → archive copy and keep filename (truncate)
+# Success → archive input so we don't reprocess
 TS=$(date +%Y%m%d-%H%M%S)
-cp "$QUICK" "$INBOX/quick.$TS.done" || true
-: > "$QUICK"
+mv "$QUICK" "$INBOX/quick.$TS.done"
 
 echo "Archived to: $INBOX/quick.$TS.done" | tee -a "$LOG_DIR/autorun.out.log"
 echo "=== $(date) DONE ===" | tee -a "$LOG_DIR/autorun.out.log"

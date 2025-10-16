@@ -1,0 +1,18 @@
+import os
+
+def compat_chat(messages, model="gpt-4o-mini", **kwargs):
+    """
+    Works with project keys (sk-proj-...) and classic keys.
+    Returns legacy-shaped dict: {"choices":[{"message":{"content": "..."} }]}
+    """
+    # Try the new SDK first (required for sk-proj-... keys)
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+        r = client.chat.completions.create(model=model, messages=messages, **kwargs)
+        return {"choices":[{"message":{"content": r.choices[0].message.content}}]}
+    except Exception:
+        # Fallback to legacy SDK if present
+        import openai
+        openai.api_key = os.environ["OPENAI_API_KEY"]
+        return openai.ChatCompletion.create(model=model, messages=messages, **kwargs)
