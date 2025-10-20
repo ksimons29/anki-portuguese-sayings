@@ -21,6 +21,7 @@ Exit codes:
 """
 
 from __future__ import annotations
+from _openai_compat import compat_chat as _compat_chat
 import argparse
 import csv
 import datetime as dt
@@ -47,17 +48,11 @@ DEFAULT_MODEL = "GPT Vocabulary Automater"
 # OPENAI
 # =========
 # If you want hardcoded key, put it here:
-HARDCODED_OPENAI_KEY = "REPLACE_WITH_YOUR_OPENAI_KEY"  # <- fill this
+HARDCODED_OPENAI_KEY = "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"  # <- your real key here
 if HARDCODED_OPENAI_KEY and "sk-" in HARDCODED_OPENAI_KEY:
     os.environ["OPENAI_API_KEY"] = HARDCODED_OPENAI_KEY
 
 LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-4o-mini")
-
-# Compat wrapper (prefers new SDK, falls back to legacy)
-try:
-    from _openai_compat import compat_chat as _compat_chat
-except Exception:
-    _compat_chat = None
 
 def ask_llm(word_en: str) -> Dict[str, str]:
     """Return dict {word_en, word_pt, sentence_pt, sentence_en} for pt-PT (C1)."""
@@ -77,9 +72,6 @@ Target word: {word_en.strip()}
 Example:
 {{"word_en":"rent","word_pt":"renda","sentence_pt":"A renda aumentou este ano e estou a negociar um novo contrato.","sentence_en":"The rent went up this year and I am negotiating a new contract."}}
 """.strip()
-
-    if _compat_chat is None:
-        raise RuntimeError("OpenAI compatibility wrapper missing: _openai_compat.py not found.")
 
     resp = _compat_chat(
         model=LLM_MODEL,

@@ -1,0 +1,14 @@
+#!/bin/bash
+set -euo pipefail
+
+INBOX="$HOME/Library/CloudStorage/iCloud Drive/Portuguese/Anki/inbox"
+TARGET="$INBOX/quick.jsonl"
+TMP="$INBOX/.quick.merge.tmp"
+
+mkdir -p "$INBOX"
+cd "$INBOX"
+
+echo "🔎 merge_inbox: INBOX=$INBOX"
+touch "$TARGET"
+
+
