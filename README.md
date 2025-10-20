@@ -1,3 +1,4 @@
+[README.md](https://github.com/user-attachments/files/22960434/README.md)
 # Anki Portuguese Automation
 
 End-to-end workflow to capture vocab on iPhone → iCloud inbox → GPT sentence generation → auto-import to Anki via AnkiConnect.
