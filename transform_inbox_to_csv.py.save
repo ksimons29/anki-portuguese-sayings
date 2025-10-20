@@ -1,14 +1,35 @@
- os.environ["OPENAI_API_KEY"] = "sk-proj-y-CsNeuOBDwtB1xDeRlPiFlbwushPcwgPWYW0EviCZxN2YBH5NDEpdG9Peu30P6hqbCGO$/usr/bin/env python3
+from _openai_compat import compat_chat
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+import os, sys, json, csv, glob, datetime
+from pathlib import Path
+import urllib.request, urllib.error, argparse
+
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import os, sys, json, csv, glob, datetime
 from pathlib import Path
 import urllib.request, urllib.error, argparse
 
 # ==== Inject fallback OPENAI_API_KEY ====
+    os.environ["OPENAI_API_KEY"] = uOBDwtB1xDRlPiFlbwushPcwgPWYW0EviCZxN2YBH5NDEpdG9Peu30P6hqbCGO2gvs2T3BlbkFJbTcIAWKPGB5J12e6ZGoMZeC7gyJ_IxCouQW0aVC_hN76DuQoNc0JvAGntlxP3onDMZ11ZqFesA"
+    os.environ["OPENAI_API_KEY"] = uOBDwtB1xDRlPiFlbwushPcwgPWYW0EviCZxN2YBH5NDEpdG9Peu30P6hqbCGO2gvs2T3BlbkFJbTcIAWKPGB5J12e6ZGoMZeC7gyJ_IxCouQW0aVC_hN76DuQoNc0JvAGntlxP3onDMZ11ZqFesA"
+    os.environ["OPENAI_API_KEY"] = uOBDwtB1xDRlPiFlbwushPcwgPWYW0EviCZxN2YBH5NDEpdG9Peu30P6hqbCGO2gvs2T3BlbkFJbTcIAWKPGB5J12e6ZGoMZeC7gyJ_IxCouQW0aVC_hN76DuQoNc0JvAGntlxP3onDMZ11ZqFesA"
+    os.environ["OPENAI_API_KEY"] = uOBDwtB1xDRlPiFlbwushPcwgPWYW0EviCZxN2YBH5NDEpdG9Peu30P6hqbCGO2gvs2T3BlbkFJbTcIAWKPGB5J12e6ZGoMZeC7gyJ_IxCouQW0aVC_hN76DuQoNc0JvAGntlxP3onDMZ11ZqFesA"
+    os.environ["OPENAI_API_KEY"] = uOBDwtB1xDRlPiFlbwushPcwgPWYW0EviCZxN2YBH5NDEpdG9Peu30P6hqbCGO2gvs2T3BlbkFJbTcIAWKPGB5J12e6ZGoMZeC7gyJ_IxCouQW0aVC_hN76DuQoNc0JvAGntlxP3onDMZ11ZqFesA"
+    os.environ["OPENAI_API_KEY"] = uOBDwtB1xDRlPiFlbwushPcwgPWYW0EviCZxN2YBH5NDEpdG9Peu30P6hqbCGO2gvs2T3BlbkFJbTcIAWKPGB5J12e6ZGoMZeC7gyJ_IxCouQW0aVC_hN76DuQoNc0JvAGntlxP3onDMZ11ZqFesA"
+    os.environ["OPENAI_API_KEY"] = uOBDwtB1xDRlPiFlbwushPcwgPWYW0EviCZxN2YBH5NDEpdG9Peu30P6hqbCGO2gvs2T3BlbkFJbTcIAWKPGB5J12e6ZGoMZeC7gyJ_IxCouQW0aVC_hN76DuQoNc0JvAGntlxP3onDMZ11ZqFesA"
+    os.environ["OPENAI_API_KEY"] = uOBDwtB1xDRlPiFlbwushPcwgPWYW0EviCZxN2YBH5NDEpdG9Peu30P6hqbCGO2gvs2T3BlbkFJbTcIAWKPGB5J12e6ZGoMZeC7gyJ_IxCouQW0aVC_hN76DuQoNc0JvAGntlxP3onDMZ11ZqFesA"
+    os.environ["OPENAI_API_KEY"] = uOBDwtB1xDRlPiFlbwushPcwgPWYW0EviCZxN2YBH5NDEpdG9Peu30P6hqbCGO2gvs2T3BlbkFJbTcIAWKPGB5J12e6ZGoMZeC7gyJ_IxCouQW0aVC_hN76DuQoNc0JvAGntlxP3onDMZ11ZqFesA"
+    os.environ["OPENAI_API_KEY"] = uOBDwtB1xDRlPiFlbwushPcwgPWYW0EviCZxN2YBH5NDEpdG9Peu30P6hqbCGO2gvs2T3BlbkFJbTcIAWKPGB5J12e6ZGoMZeC7gyJ_IxCouQW0aVC_hN76DuQoNc0JvAGntlxP3onDMZ11ZqFesA"
+    os.environ["OPENAI_API_KEY"] = uOBDwtB1xDRlPiFlbwushPcwgPWYW0EviCZxN2YBH5NDEpdG9Peu30P6hqbCGO2gvs2T3BlbkFJbTcIAWKPGB5J12e6ZGoMZeC7gyJ_IxCouQW0aVC_hN76DuQoNc0JvAGntlxP3onDMZ11ZqFesA"
+    os.environ["OPENAI_API_KEY"] = uOBDwtB1xDRlPiFlbwushPcwgPWYW0EviCZxN2YBH5NDEpdG9Peu30P6hqbCGO2gvs2T3BlbkFJbTcIAWKPGB5J12e6ZGoMZeC7gyJ_IxCouQW0aVC_hN76DuQoNc0JvAGntlxP3onDMZ11ZqFesA"
+    os.environ["OPENAI_API_KEY"] = uOBDwtB1xDRlPiFlbwushPcwgPWYW0EviCZxN2YBH5NDEpdG9Peu30P6hqbCGO2gvs2T3BlbkFJbTcIAWKPGB5J12e6ZGoMZeC7gyJ_IxCouQW0aVC_hN76DuQoNc0JvAGntlxP3onDMZ11ZqFesA"
 if not os.environ.get("OPENAI_API_KEY"):
-    os.environ["OPENAI_API_KEY"] = "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"  # ← Replace this
-    
-# ==== Paths (reused) ====
+
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY") or "sk-proj-CsNeuOBDwtB1xDeRlPiFlbwushPcwgPWYW0EviCZxN2YBH5NDEpdG9Peu30P6hqbCGO2gvs2T3BlbkFJbTcIAWKPGB5J12e6ZGoMZeC7gyJ_IxCouQW0aVC_hN76DuQoNc0JvAGntlxP3onDMZ11ZqFesA"
+
+# ==== Paths ====
 ICLOUD_BASE = Path("/Users/koossimons/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki")
 INBOX  = ICLOUD_BASE / "inbox"
 LOGS   = ICLOUD_BASE / "logs"
@@ -16,12 +37,12 @@ MASTER = ICLOUD_BASE / "sayings.csv"
 
 # ==== Defaults, with env + CLI overrides ====
 DECK_NAME_DEFAULT  = "Portuguese (pt-PT)"
-MODEL_NAME_DEFAULT = "Portuguese (pt-PT) 5-Field"
+MODEL_NAME_DEFAULT = "GPT Vocabulary Automater"
 DECK_NAME  = os.environ.get("ANKI_DECK",  DECK_NAME_DEFAULT)
 MODEL_NAME = os.environ.get("ANKI_MODEL", MODEL_NAME_DEFAULT)
 
 # ==== OpenAI ====
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY") or "sk-proj-CsNeuOBDwtB1xDeRlPiFlbwushPcwgPWYW0EviCZxN2YBH5NDEpdG9Peu30P6hqbCGO2gvs2T3BlbkFJbTcIAWKPGB5J12e6ZGoMZeC7gyJ_IxCouQW0aVC_hN76DuQoNc0JvAGntlxP3onDMZ11ZqFesA" 
 OPENAI_MODEL   = "gpt-4o-mini"  # cheap + good
 
 def log(msg: str) -> None:
@@ -93,8 +114,10 @@ def gpt_rows(words: str) -> str:
     req = urllib.request.Request(
         "https://api.openai.com/v1/chat/completions",
         data=body,
-        headers={"Authorization": f"Bearer {OPENAI_API_KEY}",
-                 "Content-Type": "application/json"},
+       headers={
+    "Authorization": "Bearer sk-proj-CsNeuOBDwtB1xDeRlPiFlbwushPcwgPWYW0EviCZxN2YBH5NDEpdG9Peu30P6hqbCGO2gvs2T3BlbkFJbTcIAWKPGB5J12e6ZGoMZeC7gyJ_IxCouQW0aVC_hN76DuQoNc0JvAGntlxP3onDMZ11ZqFesA",
+    "Content-Type": "application/json"
+},
         method="POST"
     )
     with urllib.request.urlopen(req, timeout=60) as r:

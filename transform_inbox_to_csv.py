@@ -1,11 +1,3 @@
-from _openai_compat import compat_chat
-from _openai_compat import compat_chat
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-import os, sys, json, csv, glob, datetime
-from pathlib import Path
-import urllib.request, urllib.error, argparse
-
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import os, sys, json, csv, glob, datetime
@@ -13,10 +5,8 @@ from pathlib import Path
 import urllib.request, urllib.error, argparse
 
 # ==== Inject fallback OPENAI_API_KEY ====
-if not os.environ.get("OPENAI_API_KEY"):
-    os.environ["OPENAI_API_KEY"] = "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"
-
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY") or "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"
+os.environ["OPENAI_API_KEY"] = "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"
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
 # ==== Paths ====
 ICLOUD_BASE = Path("/Users/koossimons/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki")
@@ -31,7 +21,6 @@ DECK_NAME  = os.environ.get("ANKI_DECK",  DECK_NAME_DEFAULT)
 MODEL_NAME = os.environ.get("ANKI_MODEL", MODEL_NAME_DEFAULT)
 
 # ==== OpenAI ====
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY") or "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" 
 OPENAI_MODEL   = "gpt-4o-mini"  # cheap + good
 
 def log(msg: str) -> None:
@@ -103,8 +92,10 @@ def gpt_rows(words: str) -> str:
     req = urllib.request.Request(
         "https://api.openai.com/v1/chat/completions",
         data=body,
-        headers={"Authorization": f"Bearer {OPENAI_API_KEY}",
-                 "Content-Type": "application/json"},
+        headers={
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json"
+        },
         method="POST"
     )
     with urllib.request.urlopen(req, timeout=60) as r:
@@ -154,7 +145,6 @@ def anki_ensure_deck(deck_name: str) -> bool:
         return False
 
 def anki_find(word_en: str, word_pt: str) -> bool:
-    """Collection-wide duplicate check (no deck filter)."""
     try:
         q = f'word_en:"{word_en}"'
         payload={"action":"findNotes","version":6,"params":{"query":q}}
@@ -186,7 +176,7 @@ def anki_add(rows, deck_name, model_name):
         }
     }
     try:
-        req = urllib.request.Request("http://127.0.0.1:8765", data=json.dumps(payload).encode("utf-8"))
+        req=urllib.request.Request("http://127.0.0.1:8765", data=json.dumps(payload).encode("utf-8"))
         with urllib.request.urlopen(req, timeout=20) as r:
             return json.load(r).get("result")
     except Exception as e:
@@ -202,7 +192,7 @@ def append_master(rows):
 
 def main():
     if not OPENAI_API_KEY:
-        log("No OPENAI_API_KEY; skipping auto-write. (Use ./import_all.sh manual flow.)")
+        log("No OPENAI_API_KEY; skipping auto-write.")
         return
 
     entries = read_jsonl()
@@ -223,7 +213,6 @@ def main():
         block = gpt_rows(words)
         log("GPT block:\n" + block)
         rows = parse_csv_block(block)
-        # normalize date to *today*
         today = datetime.date.today().isoformat()
         rows = [(today, r[1], r[2], r[3], r[4]) for r in rows]
     except Exception as e:
@@ -246,7 +235,6 @@ def main():
     else:
         log("All rows were duplicates; nothing added.")
 
-    # archive processed inbox files
     ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     for path, _ in entries:
         try:
