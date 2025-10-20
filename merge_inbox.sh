@@ -1,60 +1,47 @@
-#!/bin/zsh
-# Merges all quick.jsonl*.json files into quick.jsonl, removing duplicates
-
+cat > ~/anki-tools/merge_inbox.sh <<'EOF'
+#!/bin/bash
 set -euo pipefail
-cd ~/Library/CloudStorage/iCloud\ Drive/Portuguese/Anki/inbox
 
-<<<<<<< HEAD
-# === CONFIG ===
 INBOX="$HOME/Library/CloudStorage/iCloud Drive/Portuguese/Anki/inbox"
 TARGET="$INBOX/quick.jsonl"
-TEMP="$INBOX/.merged.tmp"
+TMP="$INBOX/.quick.merge.tmp"
 
-# Ensure target exists
+mkdir -p "$INBOX"
+cd "$INBOX"
+
+echo "🔎 merge_inbox: INBOX=$INBOX"
 touch "$TARGET"
-> "$TEMP"
 
-echo "🧩 Starting merge in: $INBOX"
+# be permissive: accept both *.json and *.jsonl variants commonly produced by Shortcuts
+shopt -s nullglob
+frags=( quick.jsonl.* quick.jsonl*.json quick.*.jsonl *.quick.jsonl *.jsonl.quick )
 
-# === STEP 1: Merge all quick.jsonl*.json files into quick.jsonl ===
-for file in "$INBOX"/quick.jsonl*.json(.N); do
-  [[ "$file" == "$TARGET" ]] && continue
-  echo "📥 Merging: $file"
-  cat "$file" >> "$TARGET"
-  rm -f "$file"
+# filter out the main target and any archive files
+filtered=()
+for f in "${frags[@]}"; do
+  [[ "$f" == "$(basename "$TARGET")" ]] && continue
+  [[ "$f" == *.done ]] && continue
+  [[ -f "$f" ]] && filtered+=( "$f" )
 done
 
-# === STEP 2: Remove duplicate entries ===
-# Deduplicate based on the "entries" field in JSON lines.
-awk '
-  BEGIN { FS="\""; }
-  /"entries"/ {
-    if (!seen[$4]++) print $0;
-  }
-' "$TARGET" > "$TEMP"
+echo "🧾 merge_inbox: found ${#filtered[@]} fragment(s): ${filtered[*]:-"<none>"}"
 
-mv "$TEMP" "$TARGET"
-echo "✅ Merged & deduplicated successfully → $TARGET"
-=======
-OUT="quick.jsonl"
-TMP="merged.tmp"
-
-# Merge and deduplicate
-cat quick.jsonl*.json 2>/dev/null | jq -s 'unique' > "$TMP" || exit 0
-
-# If non-empty, save to main quick.jsonl
-if [ -s "$TMP" ]; then
-  cp "$TMP" "$OUT"
-  echo "✅ Merged into $OUT"
-else
-  echo "⚠️ No files to merge"
+if (( ${#filtered[@]} == 0 )); then
+  echo "⚠️  merge_inbox: nothing to merge in $INBOX"
+  exit 0
 fi
 
-# Archive old fragments
-TS=$(date +%Y%m%d-%H%M%S)
-for f in quick.jsonl*.json; do
-  [ -e "$f" ] && mv "$f" "$f.$TS.done"
-done
+# Merge + dedupe preserving first occurrence
+cat "$TARGET" "${filtered[@]}" | awk 'NF{ if (!seen[$0]++) print $0 }' > "$TMP"
+mv "$TMP" "$TARGET"
+echo "✅ merge_inbox: merged ${#filtered[@]} fragment(s) into $(basename "$TARGET")"
 
-rm -f "$TMP"
->>>>>>> f97f5f70ec95b6cfe32be61cf538e6ba4cf7821a
+# Archive fragments
+ts=$(date +%Y%m%d-%H%M%S)
+for f in "${filtered[@]}"; do
+  mv "$f" "$f.$ts.done"
+done
+echo "🗂️  merge_inbox: archived fragments with .$ts.done suffix"
+EOF
+
+chmod +x ~/anki-tools/merge_inbox.sh

@@ -3,7 +3,7 @@ import csv
 import datetime
 from pathlib import Path
 
-MASTER = Path("/Users/koossimons/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/sayings.csv")
+MASTER = Path("/Users/koossimons/Library/CloudStorage/iCloud Drive/Portuguese/Anki/sayings.csv")
 
 def load_today_cards():
     today = datetime.date.today().isoformat()

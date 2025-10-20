@@ -1,248 +1,294 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-import os, sys, json, csv, glob, datetime
-from pathlib import Path
-import urllib.request, urllib.error, argparse
 
-# ==== Inject fallback OPENAI_API_KEY ====
-os.environ["OPENAI_API_KEY"] = "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"
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+"""
+Clean transformer for iCloud inbox -> Anki CSV and AnkiConnect push.
 
-# ==== Paths ====
-ICLOUD_BASE = Path("/Users/koossimons/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki")
-INBOX  = ICLOUD_BASE / "inbox"
-LOGS   = ICLOUD_BASE / "logs"
-MASTER = ICLOUD_BASE / "sayings.csv"
+- Input:  ~/Library/CloudStorage/iCloud Drive/Portuguese/Anki/inbox/quick.jsonl
+  Each line is JSON, e.g.: {"ts":"2025-10-16 09:30:00","src":"quick","entries":"window, door, coffee"}
+  Also supports entries: [ ... ] or {"word":"..."}.
 
-# ==== Defaults, with env + CLI overrides ====
-DECK_NAME_DEFAULT  = "Portuguese (pt-PT)"
-MODEL_NAME_DEFAULT = "GPT Vocabulary Automater"
-DECK_NAME  = os.environ.get("ANKI_DECK",  DECK_NAME_DEFAULT)
-MODEL_NAME = os.environ.get("ANKI_MODEL", MODEL_NAME_DEFAULT)
+- Output CSV (append): sayings.csv with columns:
+  word_en,word_pt,sentence_pt,sentence_en,date_added
 
-# ==== OpenAI ====
-OPENAI_MODEL   = "gpt-4o-mini"  # cheap + good
+- Snapshot of just-added rows: last_import.csv (same columns)
 
-def log(msg: str) -> None:
-    LOGS.mkdir(parents=True, exist_ok=True)
-    ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    line = f"[{ts}] {msg}"
-    print(line)
-    with (LOGS / f"{datetime.date.today()}.log").open("a", encoding="utf-8") as fh:
-        fh.write(line + "\n")
+- Anki push: addNotes to "Portuguese (pt-PT)" / "GPT Vocabulary Automater"
 
-def read_jsonl():
-    items = []
-    for path in glob.glob(str(INBOX / "*.jsonl")):
-        with open(path, "r", encoding="utf-8") as f:
-            for ln in f:
-                ln = ln.strip()
-                if not ln:
-                    continue
-                try:
-                    items.append((path, json.loads(ln)))
-                except Exception as e:
-                    log(f"ERROR bad json in {path}: {e}")
-    return items
-
-SPEC = """ROLE
-- Take a user's word/phrase list (EN or PT) and output Anki-import-ready CSV rows.
-SCHEMA (DO NOT CHANGE)
-date_added,word_pt,word_en,sentence_pt,sentence_en
-OUTPUT RULES
-- Reply with CSV rows ONLY (no header). Wrap EVERY field in double quotes; escape internal " as "".
-- One word = one row. Multiple words = multiple rows, one per line.
-LANGUAGE
-- European Portuguese (pt-PT), AO90, avoid “você”; prefer neutral or tu.
-FIELDS
-- date_added: today's date YYYY-MM-DD (Europe/Lisbon).
-- sentence_pt: 12–20 words, A2–B1, natural pt-PT.
-DUPLICATES
-- If duplicates within this request, include only once.
+Exit codes:
+  0 -> success (even if no work)
+  1 -> error (pipeline should keep quick.jsonl intact for retry)
 """
 
-def parse_cli():
-    p = argparse.ArgumentParser(add_help=False)
-    p.add_argument("--deck",  default=None)
-    p.add_argument("--model", default=None)
-    args, _ = p.parse_known_args()
-    return args
+from __future__ import annotations
+import argparse
+import csv
+import datetime as dt
+import json
+import os
+import re
+import sys
+import urllib.request, urllib.error
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
-def resolve_targets():
-    args = parse_cli()
-    deck  = args.deck  or DECK_NAME
-    model = args.model or MODEL_NAME
-    return deck, model
+# =========
+# PATHS
+# =========
+BASE = Path("/Users/koossimons/Library/CloudStorage/iCloud Drive/Portuguese/Anki")
+INBOX_FILE  = BASE / "inbox" / "quick.jsonl"
+MASTER_CSV  = BASE / "sayings.csv"
+LAST_IMPORT = BASE / "last_import.csv"
 
-def gpt_rows(words: str) -> str:
-    parts = [w.strip() for w in words.split(",") if w.strip()]
-    if len(parts) > 100:
-        parts = parts[:100]  # cost guardrail
-    words = ", ".join(parts)
+DEFAULT_DECK  = "Portuguese (pt-PT)"
+DEFAULT_MODEL = "GPT Vocabulary Automater"
 
-    body = json.dumps({
-        "model": OPENAI_MODEL,
-        "temperature": 0.2,
-        "messages": [
-            {"role": "system", "content": SPEC},
-            {"role": "user",   "content": f"add batch: {words}"}
-        ]
-    }).encode("utf-8")
+# =========
+# OPENAI
+# =========
+# If you want hardcoded key, put it here:
+HARDCODED_OPENAI_KEY = "REPLACE_WITH_YOUR_OPENAI_KEY"  # <- fill this
+if HARDCODED_OPENAI_KEY and "sk-" in HARDCODED_OPENAI_KEY:
+    os.environ["OPENAI_API_KEY"] = HARDCODED_OPENAI_KEY
 
-    req = urllib.request.Request(
-        "https://api.openai.com/v1/chat/completions",
-        data=body,
-        headers={
-            "Authorization": f"Bearer {OPENAI_API_KEY}",
-            "Content-Type": "application/json"
-        },
-        method="POST"
+LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-4o-mini")
+
+# Compat wrapper (prefers new SDK, falls back to legacy)
+try:
+    from _openai_compat import compat_chat as _compat_chat
+except Exception:
+    _compat_chat = None
+
+def ask_llm(word_en: str) -> Dict[str, str]:
+    """Return dict {word_en, word_pt, sentence_pt, sentence_en} for pt-PT (C1)."""
+    if not os.environ.get("OPENAI_API_KEY"):
+        raise RuntimeError("Missing OPENAI_API_KEY (set or hardcode in script).")
+
+    system = (
+        "You are a meticulous European Portuguese (pt-PT) language expert. "
+        "For each English lemma, produce (JSON only): word_en, word_pt, sentence_pt, sentence_en. "
+        "Sentence_pt must be idiomatic pt-PT (Lisbon context ok), 12–22 words, C1 level. "
+        "Sentence_en is a natural English gloss."
     )
-    with urllib.request.urlopen(req, timeout=60) as r:
-        data = json.load(r)
-    return data["choices"][0]["message"]["content"].strip()
+    user = f"""
+Return ONLY valid JSON, no code fences. Keys: word_en, word_pt, sentence_pt, sentence_en.
+Target word: {word_en.strip()}
 
-def parse_csv_block(block: str):
-    rdr = csv.reader(block.splitlines())
-    rows = []
-    for r in rdr:
-        if not r: continue
-        if len(r) != 5:
-            raise ValueError(f"Bad CSV row (need 5 fields): {r}")
-        rows.append(tuple(r))
-    return rows
+Example:
+{{"word_en":"rent","word_pt":"renda","sentence_pt":"A renda aumentou este ano e estou a negociar um novo contrato.","sentence_en":"The rent went up this year and I am negotiating a new contract."}}
+""".strip()
 
-def load_master_pairs():
-    pairs = set()
-    if MASTER.exists():
-        with open(MASTER, "r", encoding="utf-8") as f:
-            for r in csv.reader(f):
-                if len(r) == 5:
-                    pairs.add((r[1].strip().lower(), r[2].strip().lower()))
-    return pairs
+    if _compat_chat is None:
+        raise RuntimeError("OpenAI compatibility wrapper missing: _openai_compat.py not found.")
 
-# ===== Anki helpers =====
-def anki_list_decks():
-    try:
-        payload={"action":"deckNames","version":6}
-        req=urllib.request.Request("http://127.0.0.1:8765", data=json.dumps(payload).encode("utf-8"))
-        with urllib.request.urlopen(req, timeout=5) as r:
-            return json.load(r).get("result") or []
-    except Exception:
-        return []
+    resp = _compat_chat(
+        model=LLM_MODEL,
+        messages=[{"role":"system","content":system},{"role":"user","content":user}],
+        temperature=0.2,
+        top_p=0.95,
+        max_tokens=300,
+    )
+    text = resp["choices"][0]["message"]["content"].strip()
+    data = _extract_json(text)
 
-def anki_ensure_deck(deck_name: str) -> bool:
-    if deck_name in anki_list_decks():
-        return True
-    try:
-        payload={"action":"createDeck","version":6,"params":{"deck":deck_name}}
-        req=urllib.request.Request("http://127.0.0.1:8765", data=json.dumps(payload).encode("utf-8"))
-        with urllib.request.urlopen(req, timeout=5) as r:
-            _=json.load(r)
-        return True
-    except Exception as e:
-        log(f"Failed to create deck '{deck_name}': {e}")
-        return False
+    for k in ("word_en","word_pt","sentence_pt","sentence_en"):
+        if k not in data or not str(data[k]).strip():
+            raise ValueError(f"Model response missing '{k}': {text}")
 
-def anki_find(word_en: str, word_pt: str) -> bool:
-    try:
-        q = f'word_en:"{word_en}"'
-        payload={"action":"findNotes","version":6,"params":{"query":q}}
-        req=urllib.request.Request("http://127.0.0.1:8765", data=json.dumps(payload).encode("utf-8"))
-        with urllib.request.urlopen(req, timeout=5) as r:
-            ids = json.load(r).get("result") or []
-        return bool(ids)
-    except Exception:
-        return False
-
-def anki_add(rows, deck_name, model_name):
-    payload = {
-        "action": "addNotes",
-        "version": 6,
-        "params": {
-            "notes": [{
-                "deckName": deck_name,
-                "modelName": model_name,
-                "fields": {
-                    "date_added":  r[0],
-                    "word_pt":     r[1],
-                    "word_en":     r[2],
-                    "sentence_pt": r[3],
-                    "sentence_en": r[4],
-                },
-                "options": {"allowDuplicate": False, "duplicateScope": "collection"},
-                "tags": ["from_gpt pt-PT"]
-            } for r in rows]
-        }
+    return {
+        "word_en": data["word_en"].strip(),
+        "word_pt": data["word_pt"].strip(),
+        "sentence_pt": _clean_spaces(data["sentence_pt"]),
+        "sentence_en": _clean_spaces(data["sentence_en"]),
     }
-    try:
-        req=urllib.request.Request("http://127.0.0.1:8765", data=json.dumps(payload).encode("utf-8"))
-        with urllib.request.urlopen(req, timeout=20) as r:
-            return json.load(r).get("result")
-    except Exception as e:
-        log(f"AnkiConnect addNotes failed: {e}")
-        return None
 
-def append_master(rows):
-    MASTER.parent.mkdir(parents=True, exist_ok=True)
-    with open(MASTER, "a", encoding="utf-8", newline="") as f:
+FENCE_RE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$")
+def _extract_json(raw: str) -> Dict[str,str]:
+    s = FENCE_RE.sub("", raw.strip())
+    try:
+        return json.loads(s)
+    except json.JSONDecodeError:
+        m = re.search(r"\{.*\}", s, flags=re.S)
+        if m:
+            return json.loads(m.group(0))
+        raise
+
+def _clean_spaces(s: str) -> str:
+    return re.sub(r"\s+"," ", s).strip()
+
+# =========
+# JSONL INPUT
+# =========
+def read_quick_entries(path: Path) -> List[str]:
+    if not path.exists() or path.stat().st_size == 0:
+        return []
+    out: List[str] = []
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                # skip invalid lines
+                continue
+            if "entries" in obj:
+                e = obj["entries"]
+                if isinstance(e, str):
+                    out.extend(_split_terms(e))
+                elif isinstance(e, list):
+                    for item in e:
+                        if isinstance(item, str):
+                            out.extend(_split_terms(item))
+            elif "word" in obj and isinstance(obj["word"], str):
+                out.append(obj["word"])
+    # normalize
+    out = [w.strip() for w in out if w and w.strip()]
+    return out
+
+def _split_terms(s: str) -> List[str]:
+    return [p.strip() for p in re.split(r"[,\n;]+", s) if p.strip()]
+
+# =========
+# CSV HELPERS
+# =========
+def ensure_header(csv_path: Path) -> None:
+    if not csv_path.exists() or csv_path.stat().st_size == 0:
+        with csv_path.open("w", encoding="utf-8", newline="") as f:
+            csv.writer(f).writerow(["word_en","word_pt","sentence_pt","sentence_en","date_added"])
+
+def load_existing_wordens(csv_path: Path) -> set:
+    seen = set()
+    if csv_path.exists() and csv_path.stat().st_size > 0:
+        with csv_path.open("r", encoding="utf-8", newline="") as f:
+            r = csv.reader(f)
+            header_skipped = False
+            for row in r:
+                if not row:
+                    continue
+                if not header_skipped and row[:1] == ["word_en"]:
+                    header_skipped = True
+                    continue
+                seen.add(row[0].strip().lower())
+    return seen
+
+def append_rows(csv_path: Path, rows: List[List[str]]) -> None:
+    ensure_header(csv_path)
+    with csv_path.open("a", encoding="utf-8", newline="") as f:
         w = csv.writer(f)
-        for r in rows:
-            w.writerow(r)
+        for row in rows:
+            w.writerow(row)
 
-def main():
-    if not OPENAI_API_KEY:
-        log("No OPENAI_API_KEY; skipping auto-write.")
-        return
+# =========
+# ANKICONNECT
+# =========
+ANKI_URL = os.environ.get("ANKI_URL","http://127.0.0.1:8765")
 
-    entries = read_jsonl()
-    if not entries:
-        log("No inbox items.")
-        return
+def anki_invoke(payload: dict) -> dict:
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(ANKI_URL, data, headers={"Content-Type":"application/json"})
+    with urllib.request.urlopen(req) as resp:
+        return json.loads(resp.read().decode("utf-8"))
 
-    deck_name, model_name = resolve_targets()
-    log(f"Targets → deck='{deck_name}', model='{model_name}'")
-    if not anki_ensure_deck(deck_name):
-        log(f"Deck '{deck_name}' unavailable; aborting add.")
-        return
+def add_notes_to_anki(deck: str, model: str, rows: List[List[str]]) -> Tuple[int, List[Optional[int]]]:
+    if not rows:
+        return 0, []
+    today_tag = dt.datetime.now().strftime("auto_ptPT_%Y%m%d")
 
-    words = ", ".join([e.get("entries", "").strip() for _, e in entries])
-    log(f"Inbox snippets: {len(entries)}")
+    notes = []
+    for word_en, word_pt, sentence_pt, sentence_en, date_added in rows:
+        notes.append({
+            "deckName": deck,
+            "modelName": model,
+            "fields": {
+                "word_en": word_en,
+                "word_pt": word_pt,
+                "sentence_pt": sentence_pt,
+                "sentence_en": sentence_en,
+                "date_added": date_added,
+            },
+            "tags": ["auto","pt-PT", today_tag],
+            "options": {"allowDuplicate": False, "duplicateScope": "deck"},
+        })
+
+    payload = {"action":"addNotes","version":6,"params":{"notes": notes}}
+    result = anki_invoke(payload)
+    if "error" in result and result["error"]:
+        raise RuntimeError(f"AnkiConnect error: {result['error']}")
+    note_ids = result.get("result", [])
+    added = sum(1 for nid in note_ids if isinstance(nid, int))
+    return added, note_ids
+
+# =========
+# MAIN
+# =========
+def main(argv: Optional[List[str]] = None) -> int:
+    p = argparse.ArgumentParser()
+    p.add_argument("--deck", default=DEFAULT_DECK)
+    p.add_argument("--model", default=DEFAULT_MODEL)
+    p.add_argument("--limit", type=int, default=0)
+    args = p.parse_args(argv)
+
+    # Ensure folders
+    (BASE/"inbox").mkdir(parents=True, exist_ok=True)
+    BASE.mkdir(parents=True, exist_ok=True)
+
+    words = read_quick_entries(INBOX_FILE)
+    if not words:
+        print(f"[INFO] No entries to process in {INBOX_FILE}")
+        return 0
+
+    existing = load_existing_wordens(MASTER_CSV)
+    session_seen = set()
+    todo = []
+    for w in words:
+        k = w.strip().lower()
+        if not k or k in session_seen or k in existing:
+            continue
+        session_seen.add(k)
+        todo.append(w)
+
+    if args.limit > 0:
+        todo = todo[:args.limit]
+
+    if not todo:
+        print("[INFO] Nothing new after duplicate filtering.")
+        return 0
+
+    print(f"[INFO] Will process {len(todo)} item(s).")
+
+    today = dt.datetime.now().strftime("%Y-%m-%d")
+    new_rows: List[List[str]] = []
+
+    for idx, w in enumerate(todo, 1):
+        try:
+            pack = ask_llm(w)
+            row = [pack["word_en"], pack["word_pt"], pack["sentence_pt"], pack["sentence_en"], today]
+            new_rows.append(row)
+            print(f"[OK] {idx}/{len(todo)}  {row[0]} -> {row[1]}")
+        except Exception as e:
+            print(f"ERROR: LLM failed on '{w}': {e}", file=sys.stderr)
+            return 1   # fail fast; pipeline will keep quick.jsonl
 
     try:
-        block = gpt_rows(words)
-        log("GPT block:\n" + block)
-        rows = parse_csv_block(block)
-        today = datetime.date.today().isoformat()
-        rows = [(today, r[1], r[2], r[3], r[4]) for r in rows]
+        append_rows(MASTER_CSV, new_rows)
+        with LAST_IMPORT.open("w", encoding="utf-8", newline="") as f:
+            w = csv.writer(f); w.writerow(["word_en","word_pt","sentence_pt","sentence_en","date_added"]); w.writerows(new_rows)
+        print(f"[INFO] Appended {len(new_rows)} row(s) to {MASTER_CSV}")
+        print(f"[INFO] Snapshot written to {LAST_IMPORT}")
     except Exception as e:
-        log(f"ERROR transforming inbox: {e}")
-        return
+        print(f"ERROR: Writing CSV failed: {e}", file=sys.stderr)
+        return 1
 
-    master = load_master_pairs()
-    new, skip = [], []
-    for r in rows:
-        pair = (r[1].strip().lower(), r[2].strip().lower())
-        if pair in master or anki_find(r[2], r[1]):
-            skip.append(r)
-        else:
-            new.append(r)
+    try:
+        added, _ = add_notes_to_anki(args.deck, args.model, new_rows)
+        print(f"[INFO] Anki addNotes added {added}/{len(new_rows)}")
+    except Exception as e:
+        print(f"ERROR: Anki addNotes failed: {e}", file=sys.stderr)
+        return 1
 
-    if new:
-        append_master(new)
-        res = anki_add(new, deck_name, model_name)
-        log(f"Added {len(new)} notes via AnkiConnect. Result: {res}")
-    else:
-        log("All rows were duplicates; nothing added.")
-
-    ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    for path, _ in entries:
-        try:
-            os.rename(path, str(Path(path).with_suffix(f".{ts}.done")))
-        except Exception:
-            pass
-
-    log(f"SUMMARY new={len(new)} skipped={len(skip)}")
+    return 0
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
