@@ -1,60 +1,39 @@
-#!/bin/zsh
+#!/bin/bash
 set -euo pipefail
-set -o pipefail
-
-cd "$HOME/anki-tools"
 
 LOG_DIR="$HOME/Library/CloudStorage/iCloud Drive/Portuguese/Anki/logs"
 INBOX="$HOME/Library/CloudStorage/iCloud Drive/Portuguese/Anki/inbox"
 QUICK="$INBOX/quick.jsonl"
-PY="${PY:-$PWD/.venv/bin/python}"
-
 mkdir -p "$LOG_DIR" "$INBOX"
-TRANS_LOG="$LOG_DIR/transform.$(date +%Y%m%d-%H%M%S).log"
 
-echo "=== $(date) START ===" | tee -a "$LOG_DIR/autorun.out.log"
+LOG="$LOG_DIR/$(date +%F).log"
+echo "=== $(date) START ===" | tee -a "$LOG"
 
-# Ensure Anki (AnkiConnect) is up
+# ---- prevent overlapping runs ----
+LOCKDIR="$INBOX/.pipeline.lock"
+if ! mkdir "$LOCKDIR" 2>/dev/null; then
+  echo "Another pipeline run is already active; exiting." | tee -a "$LOG"
+  exit 0
+fi
+trap 'rmdir "$LOCKDIR"' EXIT
+# ----------------------------------
+
+# Ensure Anki is open
 open -gj -a "Anki" || true
 sleep 2
 
-# Merge fragments
-"$HOME/anki-tools/merge_inbox.sh" | tee -a "$LOG_DIR/autorun.out.log" || true
+# Always merge .json + .jsonl fragments first (replaces old merge_inbox.sh)
+"$HOME/anki-tools/.venv/bin/python" "$HOME/anki-tools/merge_quick.py" || true
 
-# Nothing to do?
-if [[ ! -s "$QUICK" ]]; then
-  echo "No $QUICK to process" | tee -a "$LOG_DIR/autorun.out.log"
-  echo "=== $(date) DONE (nothing) ===" | tee -a "$LOG_DIR/autorun.out.log"
-  exit 0
+# Transform + push to Anki
+"$HOME/anki-tools/.venv/bin/python" "$HOME/anki-tools/transform_inbox_to_csv.py" | tee -a "$LOG" || true
+
+# Optionally snapshot current quick.jsonl (if it exists & non-empty)
+if [[ -s "$QUICK" ]]; then
+  ts=$(date +%Y%m%d-%H%M%S)
+  cp "$QUICK" "$INBOX/quick.$ts.done" || true
+  : > "$QUICK" || true
+  echo "Archived to: $INBOX/quick.$ts.done" | tee -a "$LOG"
 fi
 
-# Normalize Unicode (… — – etc.)
-export PYTHONIOENCODING=UTF-8
-export LANG=en_US.UTF-8
-"$PY" ./sanitize_quick_jsonl.py "$QUICK" | tee -a "$LOG_DIR/autorun.out.log" || true
-
-# Transform + add to Anki
-if [[ -x "$PY" ]]; then
-  "$PY" ./transform_inbox_to_csv.py --deck "Portuguese (pt-PT)" --model "GPT Vocabulary Automater" \
-    2>&1 | tee "$TRANS_LOG"
-  STATUS=${pipestatus[1]}
-else
-  /usr/bin/python3 ./transform_inbox_to_csv.py --deck "Portuguese (pt-PT)" --model "GPT Vocabulary Automater" \
-    2>&1 | tee "$TRANS_LOG"
-  STATUS=${pipestatus[1]}
-fi
-
-# If transformer failed, keep QUICK for retry
-if grep -q "ERROR" "$TRANS_LOG" || [[ $STATUS -ne 0 ]]; then
-  echo "Transformer failed; leaving $QUICK in place for retry" | tee -a "$LOG_DIR/autorun.out.log"
-  echo "=== $(date) DONE (error) ===" | tee -a "$LOG_DIR/autorun.out.log"
-  exit 1
-fi
-
-# Success → archive copy and truncate input
-TS=$(date +%Y%m%d-%H%M%S)
-cp "$QUICK" "$INBOX/quick.$TS.done" || true
-: > "$QUICK"
-
-echo "Archived to: $INBOX/quick.$TS.done" | tee -a "$LOG_DIR/autorun.out.log"
-echo "=== $(date) DONE ===" | tee -a "$LOG_DIR/autorun.out.log"
+echo "=== $(date) DONE ===" | tee -a "$LOG"
