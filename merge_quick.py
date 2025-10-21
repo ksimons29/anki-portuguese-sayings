@@ -1,7 +1,14 @@
+import os
+from pathlib import Path
+
+ANKI_BASE = os.environ.get("ANKI_BASE", "/Users/koossimons/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki")
+BASE = Path(ANKI_BASE)
+
+
 from pathlib import Path
 import datetime as dt
 
-INBOX = Path.home() / "Library/CloudStorage/iCloud Drive/Portuguese/Anki/inbox"
+INBOX = Path.home() / "Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/inbox"
 TARGET = INBOX / "quick.jsonl"
 INBOX.mkdir(parents=True, exist_ok=True)
 
