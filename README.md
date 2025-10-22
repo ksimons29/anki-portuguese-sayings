@@ -274,6 +274,47 @@ open -gj -a "Anki" || true; sleep 3
 
 ---
 
+---
+
+## Monitoring OpenAI API Usage
+
+You can verify and monitor cost and token activity for this pipeline in the **OpenAI Usage Dashboard**:
+
+1. Open: `https://platform.openai.com/usage/activity` (you must be **Organization Owner** to view).
+2. Use the **date range** and **project** filters to drill into the exact period and project used by this automation.
+3. Click into **API capabilities** (e.g., “Responses”) to see **per‑model** breakdowns and minute‑level TPM when needed.
+4. Remember: all usage timestamps are shown in **UTC** in the dashboard.
+
+> If your org still uses the legacy view, use `https://platform.openai.com/usage/legacy` (or `.../account/usage`) and switch between **Cost** and **Activity**. The legacy dashboard will be removed eventually.
+
+**Optional exports**
+- Use the Export button in the usage dashboard to download CSVs for longer-range analysis.
+
+---
+
+## C1 Sentence Generation (pt‑PT)
+
+The transformer enforces **advanced European Portuguese** output for examples:
+
+- **Register & locale:** idiomatic **pt‑PT** (European Portuguese).
+- **Level:** **C1** complexity, native-like collocations.
+- **Length:** **12–22 words** for `sentence_pt` (concise but rich).
+- **Fields returned by the model (JSON only):** `word_en`, `word_pt`, `sentence_pt`, `sentence_en` (plain ASCII quotes, no code fences).
+- **English gloss:** `sentence_en` is a natural translation, not literal word-by-word.
+
+**Posting to Anki**
+- Deck: **Portuguese (pt‑PT)**
+- Model: **GPT Vocabulary Automater**
+- Tags: `auto`, `pt-PT`, plus a run-specific tag
+- Duplicates: `allowDuplicate = false`, `duplicateScope = deck` (duplicates are **skipped**, logged, and not re-added)
+
+**Input hygiene & skips**
+- Normalizes whitespace/case, trims trailing punctuation.
+- Heuristics avoid obviously long sentences that already end with terminal punctuation to keep generation focused on words/phrases.
+- If the entry matches an existing note (by deck lookup), it is treated as a duplicate.
+
+---
+
 ## Changelog
 
 ### 2025-10-22
