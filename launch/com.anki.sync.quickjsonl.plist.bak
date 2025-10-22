@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.anki.sync.quickjsonl</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>/Users/koossimons/anki-tools/run_pipeline.sh</string>
+  </array>
+
+  <!-- Run once when loaded/logged in -->
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- Run every 4 hours at fixed times: 09:00, 13:00, 17:00, 21:00 -->
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Hour</key><integer>17</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Hour</key><integer>21</integer><key>Minute</key><integer>0</integer></dict>
+  </array>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>OPENAI_API_KEY</key>
+    <string>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</string>
+    <key>LLM_MODEL</key>
+    <string>gpt-4o-mini</string>
+    <key>ANKI_URL</key>
+    <string>http://127.0.0.1:8765</string>
+    <key>ANKI_BASE</key>
+    <string>/Users/koossimons/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki</string>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/tmp/anki_vocab_sync.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/anki_vocab_sync.err</string>
+</dict>
+</plist>

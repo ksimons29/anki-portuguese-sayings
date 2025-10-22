@@ -10,17 +10,36 @@ Transform iCloud inbox quick.jsonl -> sayings.csv and push to Anki via AnkiConne
 """
 from __future__ import annotations
 
+# ---- stdlib imports (order matters so sys is available before use) ----
+import argparse
+import csv
+import datetime as dt
+import io
+import json
 import os
-from pathlib import Path
-
-ANKI_BASE = os.environ.get("ANKI_BASE", "/Users/koossimons/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki")
-BASE = Path(ANKI_BASE)
-import argparse, csv, datetime as dt, json, os, re, sys, urllib.request
+import re
+import sys
+import urllib.request
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+# ===== PATHS / DEFAULTS =====
+ANKI_BASE = os.environ.get(
+    "ANKI_BASE",
+    "/Users/koossimons/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki",
+)
+BASE        = Path(ANKI_BASE)
+INBOX_DIR   = BASE / "inbox"
+INBOX_FILE  = INBOX_DIR / "quick.jsonl"     # canonical inbox
+MASTER_CSV  = BASE / "sayings.csv"
+LAST_IMPORT = BASE / "last_import.csv"
+
+DEFAULT_DECK  = "Portuguese (pt-PT)"
+DEFAULT_MODEL = "GPT Vocabulary Automater"
+LLM_MODEL     = os.environ.get("LLM_MODEL", "gpt-4o-mini")
+ANKI_URL      = os.environ.get("ANKI_URL", "http://127.0.0.1:8765")
+
 # --- UTF-8 stdout/stderr ---
-import io
 try:
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
@@ -38,8 +57,10 @@ _SMART_MAP = {
 def _normalize_ascii_quotes(s: str) -> str:
     if not isinstance(s, str):
         return s
-    for k, v in _SMART_MAP.items(): s = s.replace(k, v)
+    for k, v in _SMART_MAP.items():
+        s = s.replace(k, v)
     return s
+
 def _safe_printerr(msg: str):
     try:
         print(msg, file=sys.stderr)
@@ -47,7 +68,7 @@ def _safe_printerr(msg: str):
         try:
             sys.stderr.buffer.write((msg + "\n").encode("utf-8", "replace"))
         except Exception:
-            print(msg.encode("ascii","ignore").decode("ascii"), file=sys.stderr)
+            print(msg.encode("ascii", "ignore").decode("ascii"), file=sys.stderr)
 
 # --- JSON helpers ---
 FENCE_RE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$")
@@ -67,17 +88,6 @@ def _clean_spaces(s: str) -> str:
 
 # ---- OpenAI wrapper (new SDK only, with MOCK mode handled in the wrapper) ----
 from _openai_compat import chat as _compat_chat
-
-# ===== PATHS / DEFAULTS =====
-BASE        = Path("/Users/koossimons/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki")
-INBOX_DIR   = BASE / "inbox"
-INBOX_FILE  = INBOX_DIR / "quick.jsonl"     # canonical inbox
-MASTER_CSV  = BASE / "sayings.csv"
-LAST_IMPORT = BASE / "last_import.csv"
-DEFAULT_DECK  = "Portuguese (pt-PT)"
-DEFAULT_MODEL = "GPT Vocabulary Automater"
-LLM_MODEL     = os.environ.get("LLM_MODEL", "gpt-4o-mini")
-ANKI_URL      = os.environ.get("ANKI_URL", "http://127.0.0.1:8765")
 
 # ===== READ JSONL =====
 def read_quick_entries(path: Path) -> List[str]:
@@ -117,12 +127,12 @@ _STOPWORDS = {
     "do","does","did","doing",
     "can","could","should","would","will","must","may","might",
     "my","your","his","her","our","their","mine","yours","hers","ours","theirs",
-    "page","pages"  # treat as low-signal in that one sentence
+    "page","pages"
 }
 _PUNCT_RE = re.compile(r"^[^\w]+|[^\w]+$")  # trim leading/trailing punctuation
 
 def _tokens(s: str) -> List[str]:
-    return [ _PUNCT_RE.sub("", t) for t in _clean_spaces(s).split() if _PUNCT_RE.sub("", t) ]
+    return [_PUNCT_RE.sub("", t) for t in _clean_spaces(s).split() if _PUNCT_RE.sub("", t)]
 
 def extract_lemma(raw: str) -> Optional[Tuple[str, str]]:
     """
@@ -131,7 +141,7 @@ def extract_lemma(raw: str) -> Optional[Tuple[str, str]]:
       - keep if 1–3 tokens (e.g., "romantic date")
       - sentence heuristic: if pattern 'to VERB' exists, pick that verb
       - else remove stopwords; if any tokens left, pick:
-         • first remaining token if there is "print" in the original
+         • 'print' if present
          • else the longest remaining token
       - else if 4+ tokens and ends with sentence punctuation, skip (too long)
     """
@@ -157,10 +167,8 @@ def extract_lemma(raw: str) -> Optional[Tuple[str, str]]:
     # remove stopwords, prefer a content token
     remaining = [t for t in toks if t.lower() not in _STOPWORDS]
     if remaining:
-        # Prefer 'print' for your sample; otherwise longest token (often the content word)
         if any(t.lower() == "print" for t in remaining):
-            lemma = "print"
-            return (lemma, "content-print")
+            return ("print", "content-print")
         lemma = max(remaining, key=len)
         return (lemma.lower(), "content-longest")
 
@@ -238,7 +246,7 @@ def add_notes_to_anki(deck: str, model: str, rows: List[List[str]]) -> Tuple[int
 
 # ===== LLM CALL =====
 def ask_llm(word_en: str) -> Dict[str, str]:
-    if not (os.getenv("OPENAI_API_KEY") or os.getenv("AZURE_OPENAI_API_KEY") or os.getenv("MOCK_LLM")=="1"):
+    if not (os.getenv("OPENAI_API_KEY") or os.getenv("AZURE_OPENAI_API_KEY") or os.getenv("MOCK_LLM") == "1"):
         raise RuntimeError("Missing OPENAI/AZURE key (or set MOCK_LLM=1).")
 
     system = (
@@ -266,7 +274,6 @@ def ask_llm(word_en: str) -> Dict[str, str]:
     try:
         data = _extract_json_sanitized(text)
     except Exception as e:
-        # ASCII-safe, short message; do not include raw model text
         raise ValueError("Bad JSON from LLM (after sanitization)") from e
 
     for k in ("word_en", "word_pt", "sentence_pt", "sentence_en"):
