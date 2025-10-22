@@ -33,6 +33,7 @@ INBOX_DIR   = BASE / "inbox"
 INBOX_FILE  = INBOX_DIR / "quick.jsonl"     # canonical inbox
 MASTER_CSV  = BASE / "sayings.csv"
 LAST_IMPORT = BASE / "last_import.csv"
+LOG_DIR     = BASE / "logs"                 # usage logs live here
 
 DEFAULT_DECK  = "Portuguese (pt-PT)"
 DEFAULT_MODEL = "GPT Vocabulary Automater"
@@ -245,13 +246,19 @@ def add_notes_to_anki(deck: str, model: str, rows: List[List[str]]) -> Tuple[int
     return added, gids
 
 # ===== LLM CALL =====
-def ask_llm(word_en: str) -> Dict[str, str]:
+def ask_llm(word_en: str) -> Tuple[Dict[str, str], Dict[str, int], Dict[str, object]]:
+    """
+    Returns: (pack, usage, meta)
+      - pack: dict with word_en/word_pt/sentence_pt/sentence_en
+      - usage: {'prompt_tokens','completion_tokens','total_tokens'} if available, else {}
+      - meta:  {'model','id','created','request_id',...} if available, else {}
+    """
     if not (os.getenv("OPENAI_API_KEY") or os.getenv("AZURE_OPENAI_API_KEY") or os.getenv("MOCK_LLM") == "1"):
         raise RuntimeError("Missing OPENAI/AZURE key (or set MOCK_LLM=1).")
 
     system = (
         "You are a meticulous European Portuguese (pt-PT) language expert. "
-        'Return JSON only and use plain ASCII double quotes (") for all keys/strings; '
+        'Return JSON only and use plain ASCII double quotes (\") for all keys/strings; '
         "do not use smart quotes. "
         "Fields: word_en, word_pt, sentence_pt, sentence_en. "
         "sentence_pt must be idiomatic pt-PT, 12-22 words, C1 level. "
@@ -270,6 +277,10 @@ def ask_llm(word_en: str) -> Dict[str, str]:
         temperature=0.2, top_p=0.95, max_tokens=300
     )
 
+    # support both minimal and enriched responses from _openai_compat
+    usage = r.get("usage") or {}
+    meta  = r.get("meta")  or {}
+
     text = _normalize_ascii_quotes(r["choices"][0]["message"]["content"].strip())
     try:
         data = _extract_json_sanitized(text)
@@ -281,12 +292,13 @@ def ask_llm(word_en: str) -> Dict[str, str]:
         if not v:
             raise ValueError(f"Missing required field: {k}")
 
-    return {
+    pack = {
         "word_en": data["word_en"].strip(),
         "word_pt": data["word_pt"].strip(),
         "sentence_pt": _clean_spaces(data["sentence_pt"]),
         "sentence_en": _clean_spaces(data["sentence_en"]),
     }
+    return pack, usage, meta
 
 # ===== MAIN =====
 def main(argv: Optional[List[str]] = None) -> int:
@@ -303,6 +315,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     BASE.mkdir(parents=True, exist_ok=True)
     INBOX_DIR.mkdir(parents=True, exist_ok=True)
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
 
     raw_items = read_quick_entries(INBOX_FILE)
     if not raw_items:
@@ -349,12 +362,29 @@ def main(argv: Optional[List[str]] = None) -> int:
     new_rows: List[List[str]] = []
     failures: List[Tuple[str, str]] = []
 
+    # token usage counters
+    calls = 0
+    prompt_sum = completion_sum = total_sum = 0
+
     for i, (lemma, original) in enumerate(todo, 1):
         try:
-            pack = ask_llm(lemma)
+            pack, usage, meta = ask_llm(lemma)
             row = [pack["word_en"], pack["word_pt"], pack["sentence_pt"], pack["sentence_en"], today]
             new_rows.append(row)
-            print(f"[OK] {i}/{len(todo)}  {row[0]} -> {row[1]}")
+
+            # accumulate usage (works even if usage is {})
+            calls += 1
+            p = usage.get("prompt_tokens") or 0
+            c = usage.get("completion_tokens") or 0
+            t = usage.get("total_tokens") or (p + c if (p or c) else 0)
+            prompt_sum     += p
+            completion_sum += c
+            total_sum      += t
+
+            rid = meta.get("request_id")
+            mid = meta.get("id")
+            print(f"[OK] {i}/{len(todo)}  {row[0]} -> {row[1]}  "
+                  f"(tokens p/c/t={p}/{c}/{t}, id={mid}, rid={rid})")
         except Exception as e:
             _safe_printerr(f"ERROR: LLM failed on '{lemma}' (from '{original}'): {e}")
             failures.append((lemma, str(e)))
@@ -366,6 +396,20 @@ def main(argv: Optional[List[str]] = None) -> int:
             wcsv = csv.writer(f)
             wcsv.writerow(["word_en", "word_pt", "sentence_pt", "sentence_en", "date_added"])
         return 1
+
+    # print and log usage summary for this run
+    print(f"[USAGE] calls={calls} prompt={prompt_sum} completion={completion_sum} total={total_sum}")
+    ulog = LOG_DIR / f"tokens_{dt.datetime.now():%Y-%m}.csv"
+    try:
+        new_file = not ulog.exists()
+        with ulog.open("a", encoding="utf-8", newline="") as f:
+            w = csv.writer(f)
+            if new_file:
+                w.writerow(["timestamp", "model", "calls", "prompt_tokens", "completion_tokens", "total_tokens"])
+            w.writerow([dt.datetime.now().isoformat(timespec="seconds"),
+                        LLM_MODEL, calls, prompt_sum, completion_sum, total_sum])
+    except Exception as e:
+        _safe_printerr(f"[WARN] Could not write usage log: {e}")
 
     try:
         append_rows(MASTER_CSV, new_rows)
