@@ -89,7 +89,6 @@ flowchart LR
 Each line in `quick.jsonl` is a **valid JSON object**. Accepted shapes:  
 =======
 Each line in `quick.jsonl` is a **valid JSON object**. Accepted shapes:
->>>>>>> 0d6e94dfd4c8ddc3a6e8961f1c4caa1b3ab73564
 The transformer reads **one JSON object per line** from `inbox/quick.jsonl`.
 
 **Required keys (choose one):**
