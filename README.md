@@ -91,17 +91,24 @@ flowchart LR
 
 ## 📂 Data contract (JSONL inbox)
 Each line in `quick.jsonl` is a **valid JSON object**. Accepted shapes:
+The transformer reads **one JSON object per line** from `inbox/quick.jsonl`.
 
-```json
-{ "entries": "print, romantic dinner, bike lanes" }
-{ "entries": ["print", "pay the bill"] }
-{ "word": "print" }
-```
+**Required keys (choose one):**
+- `entries` → either a **string** or a **list of strings**.  
+  - When a **string**, it is **split** by the regex `[,
+;]+` (commas, semicolons, or newlines).  
+  - When a **list**, **each item** is split by the same regex.
+- `word` → a single string (equivalent to a one‑item `entries` line).
 
-**Notes**
-- The transformer splits `entries`, trims, lowercases, and dedupes per run.
-- Use **short words/phrases** (1–3 tokens). For “to VERB” inputs, it extracts the **verb lemma**.
-- `--strict` mode skips long/sentence‑like inputs.
+**Optional keys (ignored by the transformer but safe to include):**
+- `ts` (timestamp), `src` (source), or any other metadata.
+
+**Examples (all valid):**
+```jsonl
+{"ts":"2025-10-22 17:17:42","src":"quick","entries":"Suspected"}
+{"ts":"2025-10-22 22:23:35","src":"quick","entries":"Coding standards"}
+{"ts":"2025-10-22 22:23:42","src":"quick","entries":"Computer mouse"}
+{"ts":"2025-10-23 11:41:16","src":"quick","entries":"Euro bill"}
 
 ---
 
