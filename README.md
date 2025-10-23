@@ -86,8 +86,12 @@ flowchart LR
 ---
 
 ## 📂 Data contract (JSONL inbox)
+<<<<<<< HEAD
 
 Each line in `quick.jsonl` is a **valid JSON object**. Accepted shapes:  
+=======
+Each line in `quick.jsonl` is a **valid JSON object**. Accepted shapes:
+>>>>>>> 0d6e94dfd4c8ddc3a6e8961f1c4caa1b3ab73564
 The transformer reads **one JSON object per line** from `inbox/quick.jsonl`.
 
 **Required keys (choose one):**
@@ -95,11 +99,18 @@ The transformer reads **one JSON object per line** from `inbox/quick.jsonl`.
   - When a **string**, it is **split** by the regex `[,
 ;]+` (commas, semicolons, or newlines).  
   - When a **list**, **each item** is split by the same regex.
+<<<<<<< HEAD
 - `word` → a single string (equivalent to a one-item `entries` line).
 
 **Optional keys (ignored by the transformer but safe to include):**
 - `ts` (timestamp), `src` (source), or any other metadata.
 
+=======
+- `word` → a single string (equivalent to a one‑item `entries` line).
+
+**Optional keys (ignored by the transformer but safe to include):**
+- `ts` (timestamp), `src` (source), or any other metadata.
+>>>>>>> 0d6e94dfd4c8ddc3a6e8961f1c4caa1b3ab73564
 ### Examples (all valid)
 
 ```json
@@ -109,6 +120,7 @@ The transformer reads **one JSON object per line** from `inbox/quick.jsonl`.
   {"ts":"2025-10-22 22:23:42","src":"quick","entries":"Computer mouse"},
   {"ts":"2025-10-23 11:41:16","src":"quick","entries":"Euro bill"}
 ]
+<<<<<<< HEAD
 ```
 
 ---
@@ -325,3 +337,8 @@ Private, personal automation. Adapt with care.
 ## 🗒️ Changelog (recent)
 
 - **2025-10-23** — Docs: aligned to the **Unified** layout you prefer; **removed dynamic image fetching** from the pipeline and clarified that visuals should be handled **statically in the Anki template**. Kept GitHub-friendly formatting and added an ASCII architecture diagram.
+=======
+--
+#### 🧾 Anki Card Data Contract (Note Model & Field Order)
+
+>>>>>>> 0d6e94dfd4c8ddc3a6e8961f1c4caa1b3ab73564
