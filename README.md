@@ -110,6 +110,44 @@ The transformer reads **one JSON object per line** from `inbox/quick.jsonl`.
 {"ts":"2025-10-22 22:23:42","src":"quick","entries":"Computer mouse"}
 {"ts":"2025-10-23 11:41:16","src":"quick","entries":"Euro bill"}
 
+🧾 Anki Card Data Contract (Note Model & Field Order)
+
+Note type (model): GPT Vocabulary Automater
+Default deck: Portuguese (pt-PT)
+CSV source: sayings.csv (UTF-8, comma-separated, quoted as needed)
+
+Field order (must match exactly)
+	1.	word_en – English headword/short phrase (1–3 tokens preferred)
+	2.	word_pt – European Portuguese translation (lemma/short phrase)
+	3.	sentence_pt – European Portuguese example sentence (C1, ~12–22 words)
+	4.	sentence_en – Natural English gloss for the sentence
+	5.	date_added – ISO date YYYY-MM-DD (local date of insertion)
+
+The CSV columns are written in this exact order by the transformer and are inserted into Anki in the same order. If your note type uses a different field order, update the model to match or map fields accordingly before importing.
+
+Format & constraints
+	•	Encoding: UTF-8 only (the pipeline enforces UTF-8).
+	•	Punctuation/quotes: CSV is properly quoted; do not hand-edit quotes.
+	•	Length: keep word_* fields short; sentence_pt targets C1 length and style.
+	•	Duplicates: the pipeline de-duplicates against sayings.csv and within a batch.
+	•	In Anki, set the model’s duplicate check to the first field (word_en) and scope to “Deck” (recommended).
+	•	No media fields: images are handled statically in your Anki template (pipeline does not fetch images).
+	•	Audio: generated at review time with Anki TTS using sentence_pt (see template snippet below).
+
+word_en,word_pt,sentence_pt,sentence_en,date_added
+"computer mouse","rato","O rato sem fios ficou sem bateria durante a reunião de equipa.","The wireless mouse ran out of battery during the team meeting.","2025-10-23"
+
+Card template: pt-PT voice (TTS) on every Portuguese sentence
+
+Add this to your Back (or appropriate) template to ensure every card speaks the Portuguese sentence:
+<div>{{word_en}} → <b>{{word_pt}}</b></div>
+<div>{{sentence_pt}}</div>
+
+<!-- macOS/iOS pt-PT voice (Joana). Adjust voice/speed/pitch if desired. -->
+{{tts pt_PT voices=Joana:sentence_pt}}
+
+Why TTS: This uses the platform’s pt-PT voice (e.g., Joana on macOS/iOS) to generate audio on-the-fly, keeping the collection small and guaranteeing that every sentence_pt is spoken. If you prefer pre-rendered files instead, generate audio during packaging and add a media field—but this project defaults to TTS for simplicity and portability.
+
 ---
 
 ## ⚙️ Setup (once)
