@@ -20,6 +20,9 @@ import os
 import re
 import sys
 import urllib.request
+import base64
+import urllib.parse
+import urllib.error
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -213,22 +216,135 @@ def append_rows(csv_path: Path, rows: List[List[str]]) -> None:
 def anki_invoke(payload: dict) -> dict:
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(ANKI_URL, data, headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req) as resp:
+    with urllib.request.urlopen(req, timeout=20) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
+# ---- Media upload to Anki (storeMediaFile) ----
+def _store_media_file(filename: str, raw_bytes: bytes) -> str:
+    b64 = base64.b64encode(raw_bytes).decode("ascii")
+    res = anki_invoke({
+        "action": "storeMediaFile", "version": 6,
+        "params": {"filename": filename, "data": b64}
+    })
+    if res.get("error"):
+        raise RuntimeError(f"AnkiConnect storeMediaFile error: {res['error']}")
+    return res.get("result") or filename
+
+# ---- Utilities for fetching images ----
+def _slug(s: str) -> str:
+    s = re.sub(r"\s+", "_", s.strip().lower())
+    s = re.sub(r"[^a-z0-9_]+", "", s)
+    return s or "img"
+
+def _download_bytes(url: str, timeout: int = 12) -> bytes:
+    req = urllib.request.Request(url, headers={"User-Agent": "anki-tools/1.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read()
+
+def _wikimedia_thumb(term: str, size: int = 512):
+    """
+    Try Wikipedia summary → thumbnail; fallback to API search → pageimage.
+    Returns (image_bytes, credit_html) or (None, None).
+    """
+    # 1) REST summary
+    try:
+        url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(term)}"
+        with urllib.request.urlopen(url, timeout=10) as r:
+            summary = json.loads(r.read().decode("utf-8"))
+        thumb = summary.get("thumbnail", {}).get("source")
+        title = summary.get("title")
+        page = summary.get("content_urls", {}).get("desktop", {}).get("page")
+        if thumb:
+            return _download_bytes(thumb), f'<a href="{page}">{title}</a> (Wikipedia)'
+    except Exception:
+        pass
+
+    # 2) Search + pageimages
+    try:
+        qurl = "https://en.wikipedia.org/w/api.php?" + urllib.parse.urlencode({
+            "action":"query", "list":"search", "format":"json", "srlimit":1, "srsearch":term
+        })
+        with urllib.request.urlopen(qurl, timeout=10) as r:
+            js = json.loads(r.read().decode("utf-8"))
+        hits = js.get("query", {}).get("search", [])
+        if not hits:
+            return None, None
+        title = hits[0]["title"]
+        pi = "https://en.wikipedia.org/w/api.php?" + urllib.parse.urlencode({
+            "action":"query", "prop":"pageimages|info", "inprop":"url",
+            "format":"json", "pithumbsize":size, "titles":title
+        })
+        with urllib.request.urlopen(pi, timeout=10) as r:
+            js2 = json.loads(r.read().decode("utf-8"))
+        for _, p in js2.get("query", {}).get("pages", {}).items():
+            src = p.get("thumbnail", {}).get("source")
+            full = p.get("fullurl")
+            if src:
+                return _download_bytes(src), f'<a href="{full}">{title}</a> (Wikipedia)'
+    except Exception:
+        pass
+    return None, None
+
+def _emoji_for(term: str) -> str:
+    if re.search(r"\b(comer|beber|cozinhar)\b", term, re.I): return "🍽️"
+    if re.search(r"\b(andar|correr|saltar|ir)\b", term, re.I): return "🏃"
+    if re.search(r"\b(casa|quarto|cozinha|rua)\b", term, re.I): return "🏠"
+    if re.search(r"\b(cão|gato|pássaro|peixe)\b", term, re.I): return "🐾"
+    if re.search(r"\b(amor|feliz|triste|medo)\b", term, re.I): return "💛"
+    return "🧠"
+
+def ensure_image_for_term(term: str, size: int = 512) -> tuple[str, str]:
+    """
+    Return (Image HTML, ImageCredit HTML). Uploads image to Anki media if found.
+    Falls back to a big emoji tile (no upload) so you always get a visual.
+    """
+    img_bytes, credit = _wikimedia_thumb(term, size=size)
+    if img_bytes:
+        fname = f"pt_{_slug(term)}.jpg"
+        stored = _store_media_file(fname, img_bytes)
+        return f'<img src="{stored}">', (credit or "")
+    em = _emoji_for(term)
+    return f'<div style="font-size:72px; text-align:center; line-height:1">{em}</div>', ""
+
 def add_notes_to_anki(deck: str, model: str, rows: List[List[str]]) -> Tuple[int, List[Optional[int]]]:
+    """
+    rows = [word_en, word_pt, sentence_pt, sentence_en, date_added]
+    For each row, we compute an image (Wikimedia → media upload; emoji fallback)
+    and set Image / ImageCredit fields so every new note has a visual.
+    """
     if not rows:
         return 0, []
     tag = dt.datetime.now().strftime("auto_ptPT_%Y%m%d")
-    notes = [{
-        "deckName": deck,
-        "modelName": model,
-        "fields": {
-            "word_en": r[0], "word_pt": r[1], "sentence_pt": r[2], "sentence_en": r[3], "date_added": r[4]
-        },
-        "tags": ["auto", "pt-PT", tag],
-        "options": {"allowDuplicate": False, "duplicateScope": "deck"},
-    } for r in rows]
+
+    notes = []
+    for r in rows:
+        word_en, word_pt, sentence_pt, sentence_en, date_added = r
+
+        # Pick the best term to illustrate (prefer PT, fallback EN)
+        term_for_image = (word_pt or "").strip() or (word_en or "").strip()
+        image_html, credit_html = ("", "")
+        if term_for_image:
+            try:
+                image_html, credit_html = ensure_image_for_term(term_for_image)
+            except Exception as e:
+                _safe_printerr(f"[img-warn] {term_for_image!r}: {e}")
+                # keep empty; card will still add fine
+
+        notes.append({
+            "deckName": deck,
+            "modelName": model,
+            "fields": {
+                "word_en": word_en,
+                "word_pt": word_pt,
+                "sentence_pt": sentence_pt,
+                "sentence_en": sentence_en,
+                "date_added": date_added,
+                "Image": image_html,
+                "ImageCredit": credit_html,
+            },
+            "tags": ["auto", "pt-PT", tag],
+            "options": {"allowDuplicate": False, "duplicateScope": "deck"},
+        })
 
     can = anki_invoke({"action": "canAddNotes", "version": 6, "params": {"notes": notes}})
     if can.get("error"):
