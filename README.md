@@ -105,11 +105,12 @@ The transformer reads **one JSON object per line** from `inbox/quick.jsonl`.
 
 **Examples (all valid):**
 ```jsonl
-{"ts":"2025-10-22 17:17:42","src":"quick","entries":"Suspected"}
+[{"ts":"2025-10-22 17:17:42","src":"quick","entries":"Suspected"}
 {"ts":"2025-10-22 22:23:35","src":"quick","entries":"Coding standards"}
 {"ts":"2025-10-22 22:23:42","src":"quick","entries":"Computer mouse"}
-{"ts":"2025-10-23 11:41:16","src":"quick","entries":"Euro bill"}
+{"ts":"2025-10-23 11:41:16","src":"quick","entries":"Euro bill"}]
 
+---
 🧾 Anki Card Data Contract (Note Model & Field Order)
 
 Note type (model): GPT Vocabulary Automater
