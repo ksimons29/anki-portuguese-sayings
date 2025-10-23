@@ -186,7 +186,7 @@ launchctl load  ~/Library/LaunchAgents/com.anki.tools.autorun.plist
 
 You can verify and monitor cost and token activity for this pipeline in the **OpenAI Usage Dashboard**:
 
-1. Open: `https://platform.openai.com/usage/activity` (you must be **Organization Owner** to view).
+1. Open: https://platform.openai.com/usage/activity`](https://platform.openai.com/settings/organization/billing/overview (you must be **Organization Owner** to view).
 2. Use the **date range** and **project** filters to drill into the exact period and project used by this automation.
 3. Click into **API capabilities** (e.g., “Responses”) to see **per‑model** breakdowns and minute‑level TPM when needed.
 4. Remember: all usage timestamps are shown in **UTC** in the dashboard.
