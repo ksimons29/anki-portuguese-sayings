@@ -195,6 +195,15 @@ You can verify and monitor cost and token activity for this pipeline in the **Op
 
 **Optional exports**
 - Use the Export button in the usage dashboard to download CSVs for longer-range analysis.
+  
+## 🔍 Verification & logs
+```bash
+python3 ~/anki-tools/check_anki_adds_today.py
+tail -n 100 /tmp/anki_vocab_sync.log
+tail -n 100 /tmp/anki_vocab_sync.err
+```
+- OpenAI usage: https://platform.openai.com/usage  
+- Monthly token log: `{ANKI_BASE}/logs/tokens_YYYY-MM.csv`
 
 ---
 
@@ -218,18 +227,6 @@ The transformer enforces **advanced European Portuguese** output for examples:
 - Normalizes whitespace/case, trims trailing punctuation.
 - Heuristics avoid obviously long sentences that already end with terminal punctuation to keep generation focused on words/phrases.
 - If the entry matches an existing note (by deck lookup), it is treated as a duplicate.
-
----
-
-
-## 🔍 Verification & logs
-```bash
-python3 ~/anki-tools/check_anki_adds_today.py
-tail -n 100 /tmp/anki_vocab_sync.log
-tail -n 100 /tmp/anki_vocab_sync.err
-```
-- OpenAI usage: https://platform.openai.com/usage  
-- Monthly token log: `{ANKI_BASE}/logs/tokens_YYYY-MM.csv`
 
 ---
 
