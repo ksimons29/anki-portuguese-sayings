@@ -85,6 +85,21 @@ Columns:
 - `sentence_en`
 - `date_added` (`YYYY-MM-DD`)
 
+## Card Images / Icons (New)
+
+We now attach a visual to every note (Wikimedia thumbnail when available, emoji fallback otherwise).  
+- One‑time: add `Image` and `ImageCredit` fields to the *GPT Vocabulary Automater* note type.  
+- Update card templates and styling (see **docs/card-images.md**).  
+- The pipeline uploads images to Anki via AnkiConnect (`storeMediaFile`), so visuals sync and work offline.
+
+**Docs:** see [`docs/card-images.md`](docs/card-images.md).
+
+**Commit hint**
+```
+docs(readme): add “Card images/icons” docs + templates + CSS
+feat: image helpers (Wikimedia + emoji fallback) with AnkiConnect storeMediaFile
+```
+
 ---
 
 ## Repository & File Overview
