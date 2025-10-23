@@ -3,8 +3,8 @@
 
 End‑to‑end system to **capture vocabulary on any Apple device (iPhone, iPad, Mac)**,
 enrich it to **C1‑level European Portuguese**, and **load into Anki** via **AnkiConnect**.
-This README keeps your preferred unified structure and wording while aligning with the
-current codebase.
+This version matches your preferred unified structure, includes a clean **architecture diagram**,
+and explains **embedded audio (pt‑PT TTS)** on cards.
 
 ---
 
@@ -15,14 +15,24 @@ current codebase.
   /Users/koossimons/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/inbox/quick.jsonl
   ```
 - The transformer **normalizes, deduplicates, and enriches** items using GPT, producing **pt‑PT** translations
-  with **C1** example sentences (≈12–22 words).
+  with a **C1** example sentence (≈12–22 words).
 - Notes are inserted into Anki (Deck **Portuguese (pt‑PT)**, Model **GPT Vocabulary Automater**) via **AnkiConnect**.
 
-> **Images:** the pipeline no longer fetches images. If you want visuals, add a **static image** to the Anki card template.
+> **Images:** the pipeline does **not** fetch images anymore. If desired, add a **static image** to the Anki card template.
 
 ---
 
 ## 🧱 Architecture
+
+![Architecture](docs/architecture.png)
+
+**Key properties**
+- **Idempotent inputs** (skips duplicates already in `sayings.csv` or same batch)
+- **C1 emphasis** (C1‑level pt‑PT example sentence)
+- **UTF‑8 safety** throughout
+- **Usage telemetry**: monthly token logs in `{ANKI_BASE}/logs/tokens_YYYY‑MM.csv`
+
+Text‑only fallback:
 
 ```
 iCloud Inbox (quick*.json / quick*.jsonl)
@@ -43,27 +53,45 @@ Support:
 - import_all.sh          Optional: export CSV to .apkg with external tool
 ```
 
-**Key properties**
-- **Idempotent inputs** (skips duplicates already in `sayings.csv` or same batch)
-- **C1 emphasis** (C1‑level pt‑PT example sentence)
-- **UTF‑8 safety** throughout
-- **Usage telemetry**: monthly token logs in `{ANKI_BASE}/logs/tokens_YYYY‑MM.csv`
+---
+
+## 🔊 Audio (pt‑PT TTS on every Portuguese sentence)
+
+You want **every Portuguese sentence to have voice automatically**. Use Anki’s built‑in **TTS** tag in your
+note templates so audio is generated **at review time** (no audio files needed).
+
+**Recommended Back template snippet**
+```html
+<div>{word_en} → <b>{word_pt}</b></div>
+<div>{sentence_pt}</div>
+
+<!-- macOS/iOS pt‑PT voice (Joana). Adjust speed/pitch if you like. -->
+{tts pt_PT voices=Joana:sentence_pt}
+```
+
+**Why this works**
+- Anki (desktop + AnkiMobile) renders the `{tts ...:FIELD}` tag using the platform’s pt‑PT system voice (e.g., **Joana** on macOS/iOS).
+- No MP3 files are stored; audio is generated on‑the‑fly, keeping the collection lean.
+- This guarantees **every card** with `sentence_pt` will **speak** when shown.
+
+**Alternative (pre‑render audio)**  
+If you prefer actual audio files baked into the deck, use `import_all.sh` with an external CSV→APKG tool
+that generates audio from `sentence_pt`. This makes cards portable without relying on local voices, at the cost
+of larger media size.
 
 ---
 
 ## 📂 Data contract (JSONL inbox)
-Each line in `quick.jsonl` is a **valid JSON object**. Accepted shapes:
-
+Accepted shapes per line in `quick.jsonl`:
 ```json
 { "entries": "print, romantic dinner, bike lanes" }
 { "entries": ["print", "pay the bill"] }
 { "word": "print" }
 ```
-
-**Notes**
-- The transformer splits `entries`, trims, lowercases, and dedupes per run.
-- Use **short words/phrases** (1–3 tokens). For “to VERB” inputs, it extracts the **verb lemma**.
-- `--strict` mode skips long/sentence‑like inputs.
+Notes:
+- The transformer splits `entries`, trims, lowercases, and de‑dupes per run.
+- Use **short words/phrases** (1–3 tokens). “to VERB” extracts the verb lemma.
+- `--strict` mode skips sentence‑like inputs or >3 tokens.
 
 ---
 
@@ -77,13 +105,13 @@ mkdir -p ~/Library/Mobile\ Documents/com~apple~CloudDocs/Portuguese/Anki/{inbox,
 python3 -m venv ~/anki-tools/.venv
 ~/anki-tools/.venv/bin/pip install --upgrade pip requests
 
-# Store OpenAI API key in Keychain (service name is fixed)
+# Store OpenAI API key in Keychain
 security add-generic-password -a "$USER" -s "anki-tools-openai" -w "<YOUR_OPENAI_API_KEY>"
 
 # Ensure Anki has the AnkiConnect add-on enabled
 ```
 
-Default paths and env (overrides optional):
+Optional env overrides:
 - `ANKI_BASE=~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki`
 - `LLM_MODEL=gpt-4o-mini`
 - `ANKI_URL=http://127.0.0.1:8765`
@@ -116,28 +144,7 @@ python3 ~/anki-tools/merge_quick.py
 ---
 
 ## ⏰ Scheduling (launchd)
-Run at 09:00, 13:00, and 19:00 local time. Create `~/Library/LaunchAgents/com.anki.tools.autorun.plist`:
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-  <key>Label</key><string>com.anki.tools.autorun</string>
-  <key>ProgramArguments</key>
-  <array><string>/bin/bash</string><string>-lc</string><string>~/anki-tools/run_pipeline.sh</string></array>
-  <key>StartCalendarInterval</key>
-  <array>
-    <dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
-    <dict><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>
-    <dict><key>Hour</key><integer>19</integer><key>Minute</key><integer>0</integer></dict>
-  </array>
-  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><false/>
-  <key>StandardOutPath</key><string>/tmp/anki_vocab_sync.log</string>
-  <key>StandardErrorPath</key><string>/tmp/anki_vocab_sync.err</string>
-</dict></plist>
-```
-Load it:
+Create `~/Library/LaunchAgents/com.anki.tools.autorun.plist` (09:00, 13:00, 19:00). Then:
 ```bash
 launchctl unload ~/Library/LaunchAgents/com.anki.tools.autorun.plist 2>/dev/null || true
 launchctl load  ~/Library/LaunchAgents/com.anki.tools.autorun.plist
@@ -157,7 +164,6 @@ tail -n 100 /tmp/anki_vocab_sync.err
 ---
 
 ## 🧪 Offline test mode
-Run without billing the API:
 ```bash
 MOCK_LLM=1 ~/anki-tools/.venv/bin/python -u ~/anki-tools/transform_inbox_to_csv.py --limit 3
 ```
@@ -166,7 +172,7 @@ MOCK_LLM=1 ~/anki-tools/.venv/bin/python -u ~/anki-tools/transform_inbox_to_csv.
 
 ## 🧯 Troubleshooting
 - **Key missing** → ensure Keychain item `anki-tools-openai` exists.
-- **AnkiConnect refused** → Anki must be running; add‑on enabled.
+- **AnkiConnect refused** → Anki running & add‑on enabled.
 - **“All candidate notes already exist”** → nothing new after de‑duplication.
 - **Encoding** → editor must be UTF‑8; pipeline enforces UTF‑8 on stdout/stderr.
 
@@ -178,4 +184,5 @@ Private, personal automation. Adapt with care.
 ---
 
 ## 🗒️ Changelog (recent)
-- **2025-10-23** — Docs: aligned to the **Unified** layout you prefer; **removed dynamic image fetching** from the pipeline and clarified that visuals should be handled **statically in the Anki template**. Kept GitHub‑friendly formatting and added an ASCII architecture diagram.
+- **2025-10-23** — Docs: added **proper architecture diagram** image and an explicit **Audio (pt‑PT TTS)** section.
+  Re‑confirmed that **dynamic image fetching** is removed; visuals should be **static** in the Anki template.
