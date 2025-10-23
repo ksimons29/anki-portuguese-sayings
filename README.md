@@ -1,352 +1,318 @@
-# 🇵🇹 Anki Portuguese Automation (pt-PT)
+# 🇵🇹 Anki Portuguese Automation (pt‑PT)
 
-End-to-end, zero-click pipeline to capture vocabulary anywhere, enrich it with context using GPT, and auto-add cards to Anki via AnkiConnect.  
-Built for European Portuguese (pt-PT) with daily scheduled runs on macOS.
+End‑to‑end, zero‑click pipeline to capture vocabulary anywhere, enrich it to C1‑level European Portuguese with GPT, and auto‑add cards to Anki via AnkiConnect.  
+Built for European Portuguese with scheduled runs on macOS.
 
-> **Why Anki?**  
-> This project leans on Anki’s spaced-repetition system (SRS) to build a durable, searchable knowledge base.  
-> Your cards live in a local database and are repeatedly reviewed on an optimal schedule for retention.
+> **Why Anki**
+> This system leans on Anki’s spaced‑repetition system to build a durable, searchable knowledge base. Your cards live locally and resurface on an optimal schedule for retention.
 
 ---
 
-## TL;DR
+## What changed in this update
 
-- Drop words/phrases into `iCloud/Portuguese/Anki/inbox/quick.jsonl` (use your “Save to Anki Inbox” shortcut).
-- A macOS LaunchAgent runs at 09:00, 13:00, 19:00 (local), opens Anki, loads your OpenAI key from Keychain, and executes the Python pipeline in your venv.
-- The pipeline:
-  1) normalizes + de-dupes,
-  2) asks the LLM for pt-PT translations + example sentences,
-  3) appends rows to `sayings.csv`,
-  4) writes a `last_import.csv` snapshot,
-  5) adds cards to Anki (deck: Portuguese (pt-PT), model: GPT Vocabulary Automater).
-- Logs: `/tmp/anki_vocab_sync.log` and `/tmp/anki_vocab_sync.err`.
+**Code changes reflected here:**
+
+1. **No more dynamic image fetching**  
+   Images are no longer downloaded or uploaded by the pipeline. Card visuals are now handled **statically in your Anki note template**. This removes flakiness and keeps the transform step fast and deterministic.  
+   _Source: `transform_inbox_to_csv.py` top‑level docstring._
+
+2. **UTF‑8‑safe LLM wrapper**  
+   Introduced `_openai_compat.py` which calls the Chat Completions API via raw HTTP with strict UTF‑8 handling and an optional `MOCK_LLM=1` offline mode.  
+   _Source: `_openai_compat.py`._
+
+3. **Token‑usage logging**  
+   Each run writes a monthly CSV at `{ANKI_BASE}/logs/tokens_YYYY‑MM.csv` with columns: `timestamp, model, calls, prompt_tokens, completion_tokens, total_tokens`.  
+   _Source: `transform_inbox_to_csv.py` around usage summary._
+
+4. **Helper scripts**  
+   - `merge_quick.py` merges any `quick*.json/jsonl` fragments into the canonical `inbox/quick.jsonl` and archives fragments with a timestamp suffix.  
+   - `check_anki_adds_today.py` prints a friendly summary of cards added **today** by reading `sayings.csv`.  
+   - `import_all.sh` builds an `.apkg` from `sayings.csv` using an external tool (`anki_from_csv_dual_audio.py`) when you want a package export.
+
+5. **Robust scheduled runner**  
+   `run_pipeline.sh` now:
+   - Logs `START`, `whoami`, and `pwd` for debugging scheduled runs
+   - Detects “Wake from Sleep” events to annotate wake‑triggered runs
+   - Pulls `OPENAI_API_KEY` from Keychain service **anki-tools-openai**
+   - Clears leftover OpenAI env vars for a clean environment
+   - Opens Anki quietly and runs Python unbuffered
+
+6. **Cleaner normalization + strict mode**  
+   The transformer supports `--strict` to skip long sentences and keep 1–3‑token phrases. It also has an improved lemma extractor with stopword removal and a “to VERB” heuristic.
+
+If your old README mentioned dynamic image fetching or a different key setup, those instructions are now **removed/updated** below.
+
+---
+
+## TLDR
+
+- Drop words or short phrases into:  
+  `iCloud Drive/Portuguese/Anki/inbox/quick.jsonl`  
+  Accepted formats per line:  
+  ```json
+  { "word": "print" }
+  { "entries": "romantic dinner, bike lanes" }
+  { "entries": ["print", "pay the bill"] }
+  ```
+- The scheduled runner opens Anki then executes the transformer which:
+  1) normalizes each entry to a target lemma or short phrase  
+  2) asks GPT for **pt‑PT** translation plus a **C1‑level** 12–22‑word example sentence  
+  3) appends to `sayings.csv` and writes `last_import.csv` snapshot  
+  4) adds notes via **AnkiConnect** to your deck and model  
+- **Images** are not fetched by the pipeline. Use a **static image** in your Anki template if you want a logo or icon on every card.
 
 ---
 
 ## Architecture
 
-```mermaid
-flowchart LR
-  subgraph iCloud["iCloud Drive"]
-    Q["quick.jsonl (inbox/)"]
-  end
+```
+iCloud (inbox) ──► merge_quick.py ──► quick.jsonl
+                               ▼
+                      transform_inbox_to_csv.py
+                               │
+                 ┌─────────────┴─────────────┐
+                 ▼                           ▼
+            sayings.csv                last_import.csv
+                 │                           │
+                 └──── addNotes via AnkiConnect (localhost:8765) ──► Anki deck
 
-  subgraph macOS["macOS User Session"]
-    LA["LaunchAgent (com.anki.sync.quickjsonl.plist)"]
-    SH["run_pipeline.sh"]
-    PY["transform_inbox_to_csv.py"]
-    VENV["Python venv"]
-    LOG["/tmp/anki_vocab_sync.*"]
-  end
-
-  subgraph Secrets["Secrets"]
-    KC["Keychain (anki-tools-openai)"]
-  end
-
-  subgraph Anki["Anki Desktop + AnkiConnect"]
-    AK["Anki app"]
-    AC["AnkiConnect API (http://localhost:8765)"]
-  end
-
-  Q -->|scheduled| LA --> SH --> KC
-  KC --> SH
-  SH -->|launches| AK --> AC
-  SH -->|exec| PY
-  PY -->|read/write| Q
-  PY -->|append| CSV["sayings.csv"]
-  PY -->|snapshot| LAST["last_import.csv"]
-  PY -->|addNotes| AC
-  SH --> LOG
+Support:
+- _openai_compat.py  → UTF‑8 safe Chat Completions wrapper (OpenAI API)
+- run_pipeline.sh    → Scheduled shell runner that sets env, opens Anki, runs Python
+- check_anki_adds_today.py → Quick verification of today’s additions
+- import_all.sh      → Optional export to .apkg (offline packaging)
 ```
 
-**Key design choices**
-- Security first: API key stored only in macOS Keychain and injected at runtime; env overrides (`OPENAI_BASE_URL`, etc.) are cleared.
-- Idempotent ingestion: The script normalizes and de-duplicates before generating or posting to Anki.
-- Append-only master CSV: `sayings.csv` is the canonical export; `last_import.csv` makes the latest batch easy to review or re-import.
-- Observable by default: Plain-text logs in `/tmp` simplify debugging; a manual kickstart exists for one-off runs.
+Key properties:
+
+- **Idempotent inputs**: duplicates are skipped if already in `sayings.csv` or within the same batch.  
+- **C1 emphasis**: `sentence_pt` is explicitly requested at C1 level in pt‑PT (12–22 words).  
+- **UTF‑8 safety**: stdout/stderr are forced to UTF‑8, smart quotes are sanitized.  
+- **Usage telemetry**: token counts per run are logged to monthly CSVs.
 
 ---
 
-## Data Contracts
+## Files and what they do
 
-### Input — `quick.jsonl` (one object per line)
-```json
-{"ts":"2025-10-22 17:10:00","src":"quick","entries":"shoelace, radiator, meadow"}
-```
-- `ts`: string timestamp (local)
-- `src`: freeform source label
-- `entries`: comma-separated list of words/phrases
+- **`transform_inbox_to_csv.py`**  
+  Main pipeline. Reads `inbox/quick.jsonl`, normalizes to lemmas, calls GPT, appends to `sayings.csv`, writes `last_import.csv`, and adds notes via AnkiConnect.  
+  CLI options:  
+  - `--deck` default `"Portuguese (pt-PT)"`  
+  - `--model` default `"GPT Vocabulary Automater"`  
+  - `--limit N` process only the first N items after de‑duplication  
+  - `--strict` skip entries with more than 3 tokens or sentence‑like inputs
 
-### Output — CSV schema (deck model: *GPT Vocabulary Automater*)
-Columns:
-- `word_en`
-- `word_pt` (pt-PT)
-- `sentence_pt` (pt-PT, natural usage)
-- `sentence_en`
-- `date_added` (`YYYY-MM-DD`)
+- **`_openai_compat.py`**  
+  Minimal HTTP client for Chat Completions with strict UTF‑8 handling. Supports `MOCK_LLM=1` for an offline deterministic JSON reply.
 
-## Card Images / Icons (New)
+- **`run_pipeline.sh`**  
+  Scheduled runner. Gets `OPENAI_API_KEY` from Keychain service **anki-tools-openai**, clears other OpenAI env vars, opens Anki, then runs the transformer unbuffered.
 
-We now attach a visual to every note (Wikimedia thumbnail when available, emoji fallback otherwise).  
-- One‑time: add `Image` and `ImageCredit` fields to the *GPT Vocabulary Automater* note type.  
-- Update card templates and styling (see **docs/card-images.md**).  
-- The pipeline uploads images to Anki via AnkiConnect (`storeMediaFile`), so visuals sync and work offline.
+- **`merge_quick.py`**  
+  Consolidates `quick*.json/jsonl` fragments into `inbox/quick.jsonl`, de‑duping lines and archiving fragments with `.YYYYMMDD-HHMMSS.done` suffix.
 
-**Docs:** see https://github.com/ksimons29/anki-portuguese-sayings/blob/main/docs-card-images.md
+- **`check_anki_adds_today.py`**  
+  Reads `sayings.csv` and prints the English→Portuguese pairs added on today’s date.
 
-**Commit hint**
-```
-docs(readme): add “Card images/icons” docs + templates + CSS
-feat: image helpers (Wikimedia + emoji fallback) with AnkiConnect storeMediaFile
-```
+- **`import_all.sh`**  
+  Optional exporter to create an `.apkg` from `sayings.csv` with TTS, using an external tool `anki_from_csv_dual_audio.py`.
 
 ---
 
-## Repository & File Overview
+## Requirements
 
-```
-~/anki-tools/
-├─ transform_inbox_to_csv.py        # Core pipeline: normalize, de-dupe, LLM, CSV, AnkiConnect
-├─ run_pipeline.sh                  # Wrapper: reads Keychain, opens Anki, launches venv python
-├─ merge_inbox.sh (optional)        # If present, merges fragments -> inbox/quick.jsonl
-└─ .venv/                           # Virtual environment used for all runs
-```
+- macOS with iCloud Drive enabled
+- Python 3.11+ in a virtualenv at `~/anki-tools/.venv`
+- Anki desktop with **AnkiConnect** add‑on enabled (default on `http://127.0.0.1:8765`)
+- OpenAI API key stored in macOS Keychain under service **anki-tools-openai**
 
-```
-~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/
-├─ inbox/quick.jsonl                # Input dropbox in iCloud
-├─ sayings.csv                      # Canonical, append-only master CSV
-└─ last_import.csv                  # Snapshot of the most recent batch
-```
+Environment variables (all optional):
 
-```
-~/Library/LaunchAgents/
-└─ com.anki.sync.quickjsonl.plist   # LaunchAgent with schedule + logs
-```
-
-```
-/tmp/
-├─ anki_vocab_sync.log              # Stdout
-└─ anki_vocab_sync.err              # Stderr
-```
+- `ANKI_BASE` defaults to `~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki`  
+  Note: On newer macOS this path may appear as `~/Library/CloudStorage/iCloud Drive/...`; either works if consistent.
+- `LLM_MODEL` defaults to `gpt-4o-mini`
+- `ANKI_URL` defaults to `http://127.0.0.1:8765`
+- `MOCK_LLM=1` enables a predictable offline response for testing
 
 ---
 
-## Prerequisites
+## Setup
 
-- macOS with Anki Desktop and **AnkiConnect** add-on enabled
-- Python venv at `~/anki-tools/.venv/`
-- `openai` Python SDK installed **in that venv**
-- iCloud Drive enabled
+1) **Create folders**  
+```
+~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/{inbox,logs}
+```
+
+2) **Virtualenv**  
+```
+python3 -m venv ~/anki-tools/.venv
+~/anki-tools/.venv/bin/pip install --upgrade pip
+~/anki-tools/.venv/bin/pip install requests
+```
+
+3) **Store your API key in Keychain**  
+```
+security add-generic-password -a "$USER" -s "anki-tools-openai" -w "<YOUR_OPENAI_API_KEY>"
+```
+
+4) **AnkiConnect**  
+Install and enable the AnkiConnect add‑on. Keep Anki running or let the script open it.
+
+5) **Model and deck**  
+Ensure your deck and model exist and have fields that match exactly:
+```
+word_en, word_pt, sentence_pt, sentence_en, date_added
+```
+Defaults are deck `"Portuguese (pt-PT)"` and model `"GPT Vocabulary Automater"`.
+If your model has different names or fields, either update the model or run with `--deck/--model`.
 
 ---
 
-## Setup (one-time)
+## Running
 
-1) Create/activate venv and install deps
-```bash
-cd ~/anki-tools
-python3 -m venv .venv
-./.venv/bin/pip install --upgrade pip openai
+**Manual run**
+```
+# Optional: merge fragments first
+python3 merge_quick.py
+
+# Transform and add to Anki
+~/anki-tools/.venv/bin/python -u ~/anki-tools/transform_inbox_to_csv.py   --deck "Portuguese (pt-PT)" --model "GPT Vocabulary Automater"
 ```
 
-2) Store your OpenAI key in Keychain (no secrets in files)
-```bash
-# Write (hidden prompt)
-security add-generic-password -a "$USER" -s anki-tools-openai -w -U
-
-# Read (avoid printing during normal runs)
-security find-generic-password -s anki-tools-openai -w
+**Quick verification**
+```
+python3 check_anki_adds_today.py
+# Example output:
+# ✅ 3 new card(s) added on 2025-10-23:
+#  1. print → imprimir
+#  2. romantic dinner → jantar romântico
+#  3. bike lanes → ciclovias
 ```
 
-3) Configure the wrapper
-- `~/anki-tools/run_pipeline.sh` will:
-  - export `OPENAI_API_KEY` from Keychain
-  - unset `OPENAI_BASE_URL`, `OPENAI_API_BASE`, `OPENAI_ORG_ID`, `OPENAI_PROJECT`
-  - open Anki and wait briefly for AnkiConnect
-  - execute the Python pipeline via `~/.venv/bin/python` with unbuffered output
-
-4) Install the LaunchAgent
-- File: `~/Library/LaunchAgents/com.anki.sync.quickjsonl.plist`
-- Key settings:
-  - `RunAtLoad = true`
-  - `KeepAlive = false`
-  - `StartCalendarInterval` at **09:00, 13:00, 19:00**
-  - `StandardOutPath = /tmp/anki_vocab_sync.log`
-  - `StandardErrorPath = /tmp/anki_vocab_sync.err`
-```bash
-launchctl unload ~/Library/LaunchAgents/com.anki.sync.quickjsonl.plist 2>/dev/null || true
-launchctl load  ~/Library/LaunchAgents/com.anki.sync.quickjsonl.plist
+**Offline test mode**
 ```
-
-5) Create your inbox
-```bash
-INBOX="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/inbox"
-mkdir -p "$INBOX"
+MOCK_LLM=1 ~/anki-tools/.venv/bin/python -u ~/anki-tools/transform_inbox_to_csv.py --limit 3
+# Produces deterministic mock JSON and exercises the whole pipeline without using the API.
 ```
 
 ---
 
-## Quick Verify
+## Scheduling on macOS
 
-```bash
-# Ensure AnkiConnect is reachable
-open -gj -a "Anki" || true; sleep 3
-curl -s localhost:8765 -X POST -H 'Content-Type: application/json' -d '{"action":"version","version":6}'
+Use `launchd` to run at 09:00, 13:00, and 19:00 local time.
+
+1) Save a LaunchAgent plist at `~/Library/LaunchAgents/com.anki.tools.autorun.plist`:
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.anki.tools.autorun</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-lc</string>
+    <string>~/anki-tools/run_pipeline.sh</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Hour</key><integer>19</integer><key>Minute</key><integer>0</integer></dict>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><false/>
+  <key>StandardOutPath</key><string>/tmp/anki_vocab_sync.log</string>
+  <key>StandardErrorPath</key><string>/tmp/anki_vocab_sync.err</string>
+</dict>
+</plist>
 ```
 
-```bash
-# Seed a test input line
-cat >> "$INBOX/quick.jsonl" <<'JSONL'
-{"ts":"2025-10-22 13:20:00","src":"quick","entries":"herbs, deodorant, wrestling, sky"}
-JSONL
+2) Load it:
+```
+launchctl unload ~/Library/LaunchAgents/com.anki.tools.autorun.plist 2>/dev/null || true
+launchctl load ~/Library/LaunchAgents/com.anki.tools.autorun.plist
 ```
 
-```bash
-# Manual run (same entrypoint the scheduler uses)
-launchctl kickstart -k gui/$(id -u)/com.anki.sync.quickjsonl
+3) Verify status:
+```
+tail -n 100 /tmp/anki_vocab_sync.log
+tail -n 100 /tmp/anki_vocab_sync.err
 ```
 
-Watch logs live:
-```bash
-tail -f /tmp/anki_vocab_sync.log /tmp/anki_vocab_sync.err
-```
-
-Expected: new rows appended to `sayings.csv`, recent rows in `last_import.csv`, and new notes in Anki (duplicates skipped).
+The scheduled runner uses `run_pipeline.sh`, which will open Anki quietly, retrieve your key from Keychain, and run the transformer.
 
 ---
 
-## Security Model
+## Input normalization rules
 
-- Key storage: macOS Keychain item `anki-tools-openai`
-- Runtime injection: wrapper exports `OPENAI_API_KEY` only for the process lifetime
-- No secret logging: command tracing disabled; logs never print secrets
-- Clean base URL: env overrides are unset to ensure the official endpoint is used
-- Key rotation: re-run the `add-generic-password` command to overwrite; then test with a manual kickstart
-
-If you ever pasted a key at the shell by mistake (shows as “command not found”):
-- Re-add to Keychain with the hidden method above
-- Optionally clear shell history for that session
+- If the input is **1–3 tokens**, keep as a short phrase.  
+- If the input contains **“to VERB”**, extract that verb as the lemma.  
+- Otherwise remove **stopwords** and pick a meaningful content token, preferring `"print"` when present, else the longest remaining token.  
+- `--strict` additionally skips any entry with more than 3 tokens or that looks like a sentence.  
+- Duplicates are skipped if the lemma is already present in `sayings.csv` or repeated within the same batch.
 
 ---
 
-## Scheduling & Power
+## Output format
 
-- Runs at 09:00, 13:00, 19:00 (local)
-- Mac must be logged in and awake
-- Recommended: Amphetamine triggers around:
-  - 08:55–09:10
-  - 12:55–13:10
-  - 18:55–19:10
-- Display sleep is fine; don’t allow full system sleep during windows.
-  Clamshell mode requires external power + display.
+`sayings.csv` header:
+```
+word_en,word_pt,sentence_pt,sentence_en,date_added
+```
 
-Optional: Add `WatchPaths` to the LaunchAgent to trigger immediately when `quick.jsonl` changes (in addition to the schedule).
+`last_import.csv` is a snapshot of the most recent batch only.  
+Anki notes are created with the same fields. Use your Anki template for any static images or extra styling.
 
 ---
 
-## Customization
+## Checking usage and logs
 
-- Deck: `Portuguese (pt-PT)`
-- Model: `GPT Vocabulary Automater`
-- LLM prompting: tuned for pt-PT; consider adding hard preferences (e.g., “lagoon -> lagoa”) in `transform_inbox_to_csv.py`
-- Dedup strategy: normalize case/whitespace and compare against both CSV and Anki to avoid re-adds
+- **OpenAI portal**: review API usage at https://platform.openai.com/usage  
+- **Local token logs**: monthly CSV at `{ANKI_BASE}/logs/tokens_YYYY-MM.csv`  
+  Example:
+  ```
+  timestamp,model,calls,prompt_tokens,completion_tokens,total_tokens
+  2025-10-23T19:05:12,gpt-4o-mini,6,312,420,732
+  ```
+- **Run logs**: see `/tmp/anki_vocab_sync.log` and `.err`, plus any printouts from `run_pipeline.sh`
 
 ---
 
 ## Troubleshooting
 
-- **Nothing happens at schedule**  
-  Check LaunchAgent is loaded:
-  ```bash
-  launchctl list | grep com.anki.sync.quickjsonl || echo "not loaded"
-  ```
-- **AnkiConnect not responding**  
-  Open Anki manually and confirm the add-on is enabled, then:
-  ```bash
-  curl -s localhost:8765 -X POST -H 'Content-Type: application/json' -d '{"action":"version","version":6}'
-  ```
-- **Logs are empty**  
-  Ensure the `.plist` `StandardOutPath`/`StandardErrorPath` point to `/tmp` and the wrapper prints a header.
-- **Duplicate cards still appear**  
-  Confirm normalization rules and queries used for dedup (CSV + Anki search).
-- **Key errors**  
-  Re-add the Keychain item and verify `run_pipeline.sh` reads it at runtime.
+- **“Missing OPENAI/AZURE key”**  
+  Ensure you added the key to Keychain with service **anki-tools-openai** and that `run_pipeline.sh` is used to launch the job.
 
-Clear logs:
-```bash
-: > /tmp/anki_vocab_sync.log; : > /tmp/anki_vocab_sync.err
-```
+- **“AnkiConnect error / connection refused”**  
+  Make sure the Anki app is running and the AnkiConnect add‑on is enabled. `run_pipeline.sh` will try to open Anki for you.
+
+- **“All candidate notes already exist”**  
+  The transformer de‑dupes against `sayings.csv` and within the batch. This message is expected when there is nothing new to add.
+
+- **Encoding issues**  
+  The pipeline forces UTF‑8 on stdout/stderr and sanitizes quotes. If you see odd characters in the CSV, confirm your editor is set to UTF‑8.
 
 ---
 
-## Local Testing (without scheduler)
+## Security notes
 
-```bash
-open -gj -a "Anki" || true; sleep 3
-~/anki-tools/.venv/bin/python ~/anki-tools/transform_inbox_to_csv.py --deck "Portuguese (pt-PT)" --model "GPT Vocabulary Automater"
-```
-
----
+- The Keychain‑stored API key is never printed. `run_pipeline.sh` only echoes a short prefix for sanity checks.  
+- Avoid running with shell tracing that might echo environment variables.  
+- Logs are plaintext. Do not copy complete secrets into logs.
 
 ---
 
-## Monitoring OpenAI API Usage
+## Roadmap ideas
 
-You can verify and monitor cost and token activity for this pipeline in the **OpenAI Usage Dashboard**:
-
-1. Open: `https://platform.openai.com/usage/activity` (you must be **Organization Owner** to view).
-2. Use the **date range** and **project** filters to drill into the exact period and project used by this automation.
-3. Click into **API capabilities** (e.g., “Responses”) to see **per‑model** breakdowns and minute‑level TPM when needed.
-4. Remember: all usage timestamps are shown in **UTC** in the dashboard.
-
-> If your org still uses the legacy view, use `https://platform.openai.com/usage/legacy` (or `.../account/usage`) and switch between **Cost** and **Activity**. The legacy dashboard will be removed eventually.
-
-**Optional exports**
-- Use the Export button in the usage dashboard to download CSVs for longer-range analysis.
-
----
-
-## C1 Sentence Generation (pt‑PT)
-
-The transformer enforces **advanced European Portuguese** output for examples:
-
-- **Register & locale:** idiomatic **pt‑PT** (European Portuguese).
-- **Level:** **C1** complexity, native-like collocations.
-- **Length:** **12–22 words** for `sentence_pt` (concise but rich).
-- **Fields returned by the model (JSON only):** `word_en`, `word_pt`, `sentence_pt`, `sentence_en` (plain ASCII quotes, no code fences).
-- **English gloss:** `sentence_en` is a natural translation, not literal word-by-word.
-
-**Posting to Anki**
-- Deck: **Portuguese (pt‑PT)**
-- Model: **GPT Vocabulary Automater**
-- Tags: `auto`, `pt-PT`, plus a run-specific tag
-- Duplicates: `allowDuplicate = false`, `duplicateScope = deck` (duplicates are **skipped**, logged, and not re-added)
-
-**Input hygiene & skips**
-- Normalizes whitespace/case, trims trailing punctuation.
-- Heuristics avoid obviously long sentences that already end with terminal punctuation to keep generation focused on words/phrases.
-- If the entry matches an existing note (by deck lookup), it is treated as a duplicate.
-
----
-
-## Changelog
-
-### 2025-10-22
-“Today’s Changes and File Guide”
-- Stored real OpenAI key in Keychain (`anki-tools-openai`), rotated safely with hidden input.
-- Verified the key by reading it back and making a live OpenAI call from the venv.
-- Ensured the `openai` package is installed and all runs use that interpreter.
-- Added `run_pipeline.sh` wrapper to export the key, clear `OPENAI_*` base variables, open Anki, wait for AnkiConnect, and run Python with unbuffered output.
-- Added temporary debug prints then removed command tracing so the key is never echoed to logs.
-- Replaced the LaunchAgent to call the wrapper and write logs to `/tmp/anki_vocab_sync.log` + `.err`.
-- Fixed schedule at 09:00, 13:00, 19:00 with `RunAtLoad=true`, `KeepAlive=false`.
-- Tested E2E: appended to `sayings.csv`, wrote `last_import.csv`, AnkiConnect added notes, duplicates skipped.
-- Added Amphetamine trigger plan around run windows.
-- Next: reinforce pt-PT lexical preferences; clearer “duplicate skipped” log lines; optional WatchPaths trigger.
+- Optional WatchPaths trigger when new inbox files land  
+- More explicit pt‑PT word choices for frequent EN→PT confusions  
+- Per‑topic tagging support in the CSV
 
 ---
 
 ## License
 
 Private, personal automation. Adapt with care.
+
+_Last updated: 2025-10-23 22:34_

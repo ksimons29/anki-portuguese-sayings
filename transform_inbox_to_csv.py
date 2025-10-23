@@ -2,11 +2,15 @@
 # -*- coding: utf-8 -*-
 """
 Transform iCloud inbox quick.jsonl -> sayings.csv and push to Anki via AnkiConnect.
+
 - Reads /Portuguese/Anki/inbox/quick.jsonl
 - Normalizes each entry to a target lemma/short phrase (e.g., "I have to print this page." -> "print")
 - Asks LLM for pt-PT translation + example sentence
 - Appends to sayings.csv, writes last_import.csv snapshot, adds to Anki
 - UTF-8 safe logging; continues past per-item errors
+
+Note: Dynamic image fetching/uploading has been removed. Card visuals are now handled
+statically in the Anki note template (e.g., a fixed logo/brand image).
 """
 from __future__ import annotations
 
@@ -20,28 +24,28 @@ import os
 import re
 import sys
 import urllib.request
-import base64
-import urllib.parse
-import urllib.error
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+
+# local
+from _openai_compat import chat as _compat_chat
 
 # ===== PATHS / DEFAULTS =====
 ANKI_BASE = os.environ.get(
     "ANKI_BASE",
     "/Users/koossimons/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki",
 )
-BASE        = Path(ANKI_BASE)
-INBOX_DIR   = BASE / "inbox"
-INBOX_FILE  = INBOX_DIR / "quick.jsonl"     # canonical inbox
-MASTER_CSV  = BASE / "sayings.csv"
+BASE = Path(ANKI_BASE)
+INBOX_DIR = BASE / "inbox"
+INBOX_FILE = INBOX_DIR / "quick.jsonl"  # canonical inbox
+MASTER_CSV = BASE / "sayings.csv"
 LAST_IMPORT = BASE / "last_import.csv"
-LOG_DIR     = BASE / "logs"                 # usage logs live here
+LOG_DIR = BASE / "logs"  # usage logs live here
 
-DEFAULT_DECK  = "Portuguese (pt-PT)"
+DEFAULT_DECK = "Portuguese (pt-PT)"
 DEFAULT_MODEL = "GPT Vocabulary Automater"
-LLM_MODEL     = os.environ.get("LLM_MODEL", "gpt-4o-mini")
-ANKI_URL      = os.environ.get("ANKI_URL", "http://127.0.0.1:8765")
+LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-4o-mini")
+ANKI_URL = os.environ.get("ANKI_URL", "http://127.0.0.1:8765")
 
 # --- UTF-8 stdout/stderr ---
 try:
@@ -49,21 +53,34 @@ try:
     sys.stderr.reconfigure(encoding="utf-8")
 except Exception:
     if hasattr(sys.stdout, "buffer"):
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+        sys.stdout = io.TextIOWrapper(
+            sys.stdout.buffer, encoding="utf-8", errors="replace"
+        )
     if hasattr(sys.stderr, "buffer"):
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+        sys.stderr = io.TextIOWrapper(
+            sys.stderr.buffer, encoding="utf-8", errors="replace"
+        )
 
 # --- sanitize smart quotes & safe stderr ---
 _SMART_MAP = {
-    "“": '"', "”": '"', "‘": "'", "’": "'",
-    "\u00A0": " ", "\u2009": " ", "\u200A": " ", "\u202F": " ",
+    "“": '"',
+    "”": '"',
+    "‘": "'",
+    "’": "'",
+    "\u00a0": " ",
+    "\u2009": " ",
+    "\u200a": " ",
+    "\u202f": " ",
 }
+
+
 def _normalize_ascii_quotes(s: str) -> str:
     if not isinstance(s, str):
         return s
     for k, v in _SMART_MAP.items():
         s = s.replace(k, v)
     return s
+
 
 def _safe_printerr(msg: str):
     try:
@@ -74,8 +91,11 @@ def _safe_printerr(msg: str):
         except Exception:
             print(msg.encode("ascii", "ignore").decode("ascii"), file=sys.stderr)
 
+
 # --- JSON helpers ---
 FENCE_RE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$")
+
+
 def _extract_json_sanitized(raw: str) -> Dict[str, str]:
     s2 = FENCE_RE.sub("", raw.strip())
     s2 = _normalize_ascii_quotes(s2)
@@ -87,16 +107,15 @@ def _extract_json_sanitized(raw: str) -> Dict[str, str]:
             return json.loads(_normalize_ascii_quotes(m.group(0)))
         raise
 
+
 def _clean_spaces(s: str) -> str:
     return re.sub(r"\s+", " ", str(s)).strip()
 
-# ---- OpenAI wrapper (new SDK only, with MOCK mode handled in the wrapper) ----
-from _openai_compat import chat as _compat_chat
 
 # ===== READ JSONL =====
 def read_quick_entries(path: Path) -> List[str]:
     """Accepts lines like:
-       {"entries":"w1, w2"} or {"entries":["w1","w2"]} or {"word":"w1"}"""
+    {"entries":"w1, w2"} or {"entries":["w1","w2"]} or {"word":"w1"}"""
     if not path.exists() or path.stat().st_size == 0:
         return []
     out: List[str] = []
@@ -112,31 +131,120 @@ def read_quick_entries(path: Path) -> List[str]:
             if "entries" in obj:
                 e = obj["entries"]
                 if isinstance(e, str):
-                    out.extend([p.strip() for p in re.split(r"[,\n;]+", e) if p.strip()])
+                    out.extend(
+                        [p.strip() for p in re.split(r"[,\n;]+", e) if p.strip()]
+                    )
                 elif isinstance(e, list):
                     for item in e:
                         if isinstance(item, str):
-                            out.extend([p.strip() for p in re.split(r"[,\n;]+", item) if p.strip()])
+                            out.extend(
+                                [
+                                    p.strip()
+                                    for p in re.split(r"[,\n;]+", item)
+                                    if p.strip()
+                                ]
+                            )
             elif isinstance(obj.get("word"), str):
                 out.append(obj["word"])
     return out
 
+
 # ===== NORMALIZATION / LEMMA EXTRACTION =====
 _STOPWORDS = {
-    "i","you","he","she","it","we","they","me","him","her","us","them",
-    "a","an","the","this","that","these","those","to","of","in","on","at","for","from","with","by","as","about","into","through","over","after","before","between","without","within","against",
-    "and","or","but","if","because","so","though","although","while",
-    "be","am","is","are","was","were","been","being",
-    "have","has","had","having",
-    "do","does","did","doing",
-    "can","could","should","would","will","must","may","might",
-    "my","your","his","her","our","their","mine","yours","hers","ours","theirs",
-    "page","pages"
+    "i",
+    "you",
+    "he",
+    "she",
+    "it",
+    "we",
+    "they",
+    "me",
+    "him",
+    "her",
+    "us",
+    "them",
+    "a",
+    "an",
+    "the",
+    "this",
+    "that",
+    "these",
+    "those",
+    "to",
+    "of",
+    "in",
+    "on",
+    "at",
+    "for",
+    "from",
+    "with",
+    "by",
+    "as",
+    "about",
+    "into",
+    "through",
+    "over",
+    "after",
+    "before",
+    "between",
+    "without",
+    "within",
+    "against",
+    "and",
+    "or",
+    "but",
+    "if",
+    "because",
+    "so",
+    "though",
+    "although",
+    "while",
+    "be",
+    "am",
+    "is",
+    "are",
+    "was",
+    "were",
+    "been",
+    "being",
+    "have",
+    "has",
+    "had",
+    "having",
+    "do",
+    "does",
+    "did",
+    "doing",
+    "can",
+    "could",
+    "should",
+    "would",
+    "will",
+    "must",
+    "may",
+    "might",
+    "my",
+    "your",
+    "his",
+    "her",
+    "our",
+    "their",
+    "mine",
+    "yours",
+    "hers",
+    "ours",
+    "theirs",
+    "page",
+    "pages",
 }
 _PUNCT_RE = re.compile(r"^[^\w]+|[^\w]+$")  # trim leading/trailing punctuation
 
+
 def _tokens(s: str) -> List[str]:
-    return [_PUNCT_RE.sub("", t) for t in _clean_spaces(s).split() if _PUNCT_RE.sub("", t)]
+    return [
+        _PUNCT_RE.sub("", t) for t in _clean_spaces(s).split() if _PUNCT_RE.sub("", t)
+    ]
+
 
 def extract_lemma(raw: str) -> Optional[Tuple[str, str]]:
     """
@@ -184,11 +292,15 @@ def extract_lemma(raw: str) -> Optional[Tuple[str, str]]:
     lemma = " ".join(toks[:3]).lower()
     return (lemma, "fallback-top3")
 
+
 # ===== CSV =====
 def ensure_header(csv_path: Path) -> None:
     if not csv_path.exists() or csv_path.stat().st_size == 0:
         with csv_path.open("w", encoding="utf-8", newline="") as f:
-            csv.writer(f).writerow(["word_en", "word_pt", "sentence_pt", "sentence_en", "date_added"])
+            csv.writer(f).writerow(
+                ["word_en", "word_pt", "sentence_pt", "sentence_en", "date_added"]
+            )
+
 
 def load_existing_words(csv_path: Path) -> set:
     seen = set()
@@ -205,6 +317,7 @@ def load_existing_words(csv_path: Path) -> set:
                 seen.add(row[0].strip().lower())
     return seen
 
+
 def append_rows(csv_path: Path, rows: List[List[str]]) -> None:
     ensure_header(csv_path)
     with csv_path.open("a", encoding="utf-8", newline="") as f:
@@ -212,141 +325,51 @@ def append_rows(csv_path: Path, rows: List[List[str]]) -> None:
         for row in rows:
             w.writerow(row)
 
+
 # ===== ANKICONNECT =====
 def anki_invoke(payload: dict) -> dict:
     data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(ANKI_URL, data, headers={"Content-Type": "application/json"})
+    req = urllib.request.Request(
+        ANKI_URL, data, headers={"Content-Type": "application/json"}
+    )
     with urllib.request.urlopen(req, timeout=20) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
-# ---- Media upload to Anki (storeMediaFile) ----
-def _store_media_file(filename: str, raw_bytes: bytes) -> str:
-    b64 = base64.b64encode(raw_bytes).decode("ascii")
-    res = anki_invoke({
-        "action": "storeMediaFile", "version": 6,
-        "params": {"filename": filename, "data": b64}
-    })
-    if res.get("error"):
-        raise RuntimeError(f"AnkiConnect storeMediaFile error: {res['error']}")
-    return res.get("result") or filename
 
-# ---- Utilities for fetching images ----
-def _slug(s: str) -> str:
-    s = re.sub(r"\s+", "_", s.strip().lower())
-    s = re.sub(r"[^a-z0-9_]+", "", s)
-    return s or "img"
-
-def _download_bytes(url: str, timeout: int = 12) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": "anki-tools/1.0"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return r.read()
-
-def _wikimedia_thumb(term: str, size: int = 512):
-    """
-    Try Wikipedia summary → thumbnail; fallback to API search → pageimage.
-    Returns (image_bytes, credit_html) or (None, None).
-    """
-    # 1) REST summary
-    try:
-        url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(term)}"
-        with urllib.request.urlopen(url, timeout=10) as r:
-            summary = json.loads(r.read().decode("utf-8"))
-        thumb = summary.get("thumbnail", {}).get("source")
-        title = summary.get("title")
-        page = summary.get("content_urls", {}).get("desktop", {}).get("page")
-        if thumb:
-            return _download_bytes(thumb), f'<a href="{page}">{title}</a> (Wikipedia)'
-    except Exception:
-        pass
-
-    # 2) Search + pageimages
-    try:
-        qurl = "https://en.wikipedia.org/w/api.php?" + urllib.parse.urlencode({
-            "action":"query", "list":"search", "format":"json", "srlimit":1, "srsearch":term
-        })
-        with urllib.request.urlopen(qurl, timeout=10) as r:
-            js = json.loads(r.read().decode("utf-8"))
-        hits = js.get("query", {}).get("search", [])
-        if not hits:
-            return None, None
-        title = hits[0]["title"]
-        pi = "https://en.wikipedia.org/w/api.php?" + urllib.parse.urlencode({
-            "action":"query", "prop":"pageimages|info", "inprop":"url",
-            "format":"json", "pithumbsize":size, "titles":title
-        })
-        with urllib.request.urlopen(pi, timeout=10) as r:
-            js2 = json.loads(r.read().decode("utf-8"))
-        for _, p in js2.get("query", {}).get("pages", {}).items():
-            src = p.get("thumbnail", {}).get("source")
-            full = p.get("fullurl")
-            if src:
-                return _download_bytes(src), f'<a href="{full}">{title}</a> (Wikipedia)'
-    except Exception:
-        pass
-    return None, None
-
-def _emoji_for(term: str) -> str:
-    if re.search(r"\b(comer|beber|cozinhar)\b", term, re.I): return "🍽️"
-    if re.search(r"\b(andar|correr|saltar|ir)\b", term, re.I): return "🏃"
-    if re.search(r"\b(casa|quarto|cozinha|rua)\b", term, re.I): return "🏠"
-    if re.search(r"\b(cão|gato|pássaro|peixe)\b", term, re.I): return "🐾"
-    if re.search(r"\b(amor|feliz|triste|medo)\b", term, re.I): return "💛"
-    return "🧠"
-
-def ensure_image_for_term(term: str, size: int = 512) -> tuple[str, str]:
-    """
-    Return (Image HTML, ImageCredit HTML). Uploads image to Anki media if found.
-    Falls back to a big emoji tile (no upload) so you always get a visual.
-    """
-    img_bytes, credit = _wikimedia_thumb(term, size=size)
-    if img_bytes:
-        fname = f"pt_{_slug(term)}.jpg"
-        stored = _store_media_file(fname, img_bytes)
-        return f'<img src="{stored}">', (credit or "")
-    em = _emoji_for(term)
-    return f'<div style="font-size:72px; text-align:center; line-height:1">{em}</div>', ""
-
-def add_notes_to_anki(deck: str, model: str, rows: List[List[str]]) -> Tuple[int, List[Optional[int]]]:
+def add_notes_to_anki(
+    deck: str, model: str, rows: List[List[str]]
+) -> Tuple[int, List[Optional[int]]]:
     """
     rows = [word_en, word_pt, sentence_pt, sentence_en, date_added]
-    For each row, we compute an image (Wikimedia → media upload; emoji fallback)
-    and set Image / ImageCredit fields so every new note has a visual.
+    Builds Anki notes with text-only fields. Static images are handled in the note template.
     """
     if not rows:
         return 0, []
     tag = dt.datetime.now().strftime("auto_ptPT_%Y%m%d")
 
-    notes = []
+    notes: List[dict] = []
     for r in rows:
         word_en, word_pt, sentence_pt, sentence_en, date_added = r
 
-        # Pick the best term to illustrate (prefer PT, fallback EN)
-        term_for_image = (word_pt or "").strip() or (word_en or "").strip()
-        image_html, credit_html = ("", "")
-        if term_for_image:
-            try:
-                image_html, credit_html = ensure_image_for_term(term_for_image)
-            except Exception as e:
-                _safe_printerr(f"[img-warn] {term_for_image!r}: {e}")
-                # keep empty; card will still add fine
+        notes.append(
+            {
+                "deckName": deck,
+                "modelName": model,
+                "fields": {
+                    "word_en": word_en,
+                    "word_pt": word_pt,
+                    "sentence_pt": sentence_pt,
+                    "sentence_en": sentence_en,
+                    "date_added": date_added,
+                },
+                "tags": ["auto", "pt-PT", tag],
+                "options": {"allowDuplicate": False, "duplicateScope": "deck"},
+            }
+        )
 
-        notes.append({
-            "deckName": deck,
-            "modelName": model,
-            "fields": {
-                "word_en": word_en,
-                "word_pt": word_pt,
-                "sentence_pt": sentence_pt,
-                "sentence_en": sentence_en,
-                "date_added": date_added,
-                "Image": image_html,
-                "ImageCredit": credit_html,
-            },
-            "tags": ["auto", "pt-PT", tag],
-            "options": {"allowDuplicate": False, "duplicateScope": "deck"},
-        })
-
-    can = anki_invoke({"action": "canAddNotes", "version": 6, "params": {"notes": notes}})
+    can = anki_invoke(
+        {"action": "canAddNotes", "version": 6, "params": {"notes": notes}}
+    )
     if can.get("error"):
         raise RuntimeError(f"AnkiConnect canAddNotes error: {can['error']}")
     flags = can.get("result", [])
@@ -354,12 +377,15 @@ def add_notes_to_anki(deck: str, model: str, rows: List[List[str]]) -> Tuple[int
     if not addable:
         print("[INFO] All candidate notes already exist in Anki (nothing to add).")
         return 0, []
-    res = anki_invoke({"action": "addNotes", "version": 6, "params": {"notes": addable}})
+    res = anki_invoke(
+        {"action": "addNotes", "version": 6, "params": {"notes": addable}}
+    )
     if res.get("error"):
         raise RuntimeError(f"AnkiConnect error: {res['error']}")
     gids = res.get("result", [])
     added = sum(1 for nid in gids if isinstance(nid, int))
     return added, gids
+
 
 # ===== LLM CALL =====
 def ask_llm(word_en: str) -> Tuple[Dict[str, str], Dict[str, int], Dict[str, object]]:
@@ -369,12 +395,16 @@ def ask_llm(word_en: str) -> Tuple[Dict[str, str], Dict[str, int], Dict[str, obj
       - usage: {'prompt_tokens','completion_tokens','total_tokens'} if available, else {}
       - meta:  {'model','id','created','request_id',...} if available, else {}
     """
-    if not (os.getenv("OPENAI_API_KEY") or os.getenv("AZURE_OPENAI_API_KEY") or os.getenv("MOCK_LLM") == "1"):
+    if not (
+        os.getenv("OPENAI_API_KEY")
+        or os.getenv("AZURE_OPENAI_API_KEY")
+        or os.getenv("MOCK_LLM") == "1"
+    ):
         raise RuntimeError("Missing OPENAI/AZURE key (or set MOCK_LLM=1).")
 
     system = (
         "You are a meticulous European Portuguese (pt-PT) language expert. "
-        'Return JSON only and use plain ASCII double quotes (\") for all keys/strings; '
+        'Return JSON only and use plain ASCII double quotes (") for all keys/strings; '
         "do not use smart quotes. "
         "Fields: word_en, word_pt, sentence_pt, sentence_en. "
         "sentence_pt must be idiomatic pt-PT, 12-22 words, C1 level. "
@@ -388,14 +418,18 @@ def ask_llm(word_en: str) -> Tuple[Dict[str, str], Dict[str, int], Dict[str, obj
 
     r = _compat_chat(
         model=LLM_MODEL,
-        messages=[{"role": "system", "content": system},
-                  {"role": "user", "content": user}],
-        temperature=0.2, top_p=0.95, max_tokens=300
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        temperature=0.2,
+        top_p=0.95,
+        max_tokens=300,
     )
 
     # support both minimal and enriched responses from _openai_compat
     usage = r.get("usage") or {}
-    meta  = r.get("meta")  or {}
+    meta = r.get("meta") or {}
 
     text = _normalize_ascii_quotes(r["choices"][0]["message"]["content"].strip())
     try:
@@ -416,18 +450,24 @@ def ask_llm(word_en: str) -> Tuple[Dict[str, str], Dict[str, int], Dict[str, obj
     }
     return pack, usage, meta
 
+
 # ===== MAIN =====
 def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--deck", default=DEFAULT_DECK)
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--limit", type=int, default=0)
-    ap.add_argument("--strict", action="store_true",
-                    help="If set, skip any entry with >3 tokens or ending in sentence punctuation.")
+    ap.add_argument(
+        "--strict",
+        action="store_true",
+        help="If set, skip any entry with >3 tokens or ending in sentence punctuation.",
+    )
     args = ap.parse_args(argv)
 
-    print(f"[enc] stdout={getattr(sys.stdout, 'encoding', None)} "
-          f"stderr={getattr(sys.stderr, 'encoding', None)}")
+    print(
+        f"[enc] stdout={getattr(sys.stdout, 'encoding', None)} "
+        f"stderr={getattr(sys.stderr, 'encoding', None)}"
+    )
 
     BASE.mkdir(parents=True, exist_ok=True)
     INBOX_DIR.mkdir(parents=True, exist_ok=True)
@@ -468,7 +508,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         seen.add(k)
         todo.append((lemma, original))
     if args.limit > 0:
-        todo = todo[:args.limit]
+        todo = todo[: args.limit]
     if not todo:
         print("[INFO] Nothing new after duplicate filtering.")
         return 0
@@ -485,7 +525,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     for i, (lemma, original) in enumerate(todo, 1):
         try:
             pack, usage, meta = ask_llm(lemma)
-            row = [pack["word_en"], pack["word_pt"], pack["sentence_pt"], pack["sentence_en"], today]
+            row = [
+                pack["word_en"],
+                pack["word_pt"],
+                pack["sentence_pt"],
+                pack["sentence_en"],
+                today,
+            ]
             new_rows.append(row)
 
             # accumulate usage (works even if usage is {})
@@ -493,14 +539,16 @@ def main(argv: Optional[List[str]] = None) -> int:
             p = usage.get("prompt_tokens") or 0
             c = usage.get("completion_tokens") or 0
             t = usage.get("total_tokens") or (p + c if (p or c) else 0)
-            prompt_sum     += p
+            prompt_sum += p
             completion_sum += c
-            total_sum      += t
+            total_sum += t
 
             rid = meta.get("request_id")
             mid = meta.get("id")
-            print(f"[OK] {i}/{len(todo)}  {row[0]} -> {row[1]}  "
-                  f"(tokens p/c/t={p}/{c}/{t}, id={mid}, rid={rid})")
+            print(
+                f"[OK] {i}/{len(todo)}  {row[0]} -> {row[1]}  "
+                f"(tokens p/c/t={p}/{c}/{t}, id={mid}, rid={rid})"
+            )
         except Exception as e:
             _safe_printerr(f"ERROR: LLM failed on '{lemma}' (from '{original}'): {e}")
             failures.append((lemma, str(e)))
@@ -510,20 +558,41 @@ def main(argv: Optional[List[str]] = None) -> int:
         _safe_printerr("[ERROR] All items failed; nothing to write/add.")
         with LAST_IMPORT.open("w", encoding="utf-8", newline="") as f:
             wcsv = csv.writer(f)
-            wcsv.writerow(["word_en", "word_pt", "sentence_pt", "sentence_en", "date_added"])
+            wcsv.writerow(
+                ["word_en", "word_pt", "sentence_pt", "sentence_en", "date_added"]
+            )
         return 1
 
     # print and log usage summary for this run
-    print(f"[USAGE] calls={calls} prompt={prompt_sum} completion={completion_sum} total={total_sum}")
+    print(
+        f"[USAGE] calls={calls} prompt={prompt_sum} completion={completion_sum} total={total_sum}"
+    )
     ulog = LOG_DIR / f"tokens_{dt.datetime.now():%Y-%m}.csv"
     try:
         new_file = not ulog.exists()
         with ulog.open("a", encoding="utf-8", newline="") as f:
             w = csv.writer(f)
             if new_file:
-                w.writerow(["timestamp", "model", "calls", "prompt_tokens", "completion_tokens", "total_tokens"])
-            w.writerow([dt.datetime.now().isoformat(timespec="seconds"),
-                        LLM_MODEL, calls, prompt_sum, completion_sum, total_sum])
+                w.writerow(
+                    [
+                        "timestamp",
+                        "model",
+                        "calls",
+                        "prompt_tokens",
+                        "completion_tokens",
+                        "total_tokens",
+                    ]
+                )
+            w.writerow(
+                [
+                    dt.datetime.now().isoformat(timespec="seconds"),
+                    LLM_MODEL,
+                    calls,
+                    prompt_sum,
+                    completion_sum,
+                    total_sum,
+                ]
+            )
     except Exception as e:
         _safe_printerr(f"[WARN] Could not write usage log: {e}")
 
@@ -531,7 +600,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         append_rows(MASTER_CSV, new_rows)
         with LAST_IMPORT.open("w", encoding="utf-8", newline="") as f:
             w = csv.writer(f)
-            w.writerow(["word_en", "word_pt", "sentence_pt", "sentence_en", "date_added"])
+            w.writerow(
+                ["word_en", "word_pt", "sentence_pt", "sentence_en", "date_added"]
+            )
             w.writerows(new_rows)
         print(f"[INFO] Appended {len(new_rows)} row(s) to {MASTER_CSV}")
         print(f"[INFO] Snapshot written to {LAST_IMPORT}")
