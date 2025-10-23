@@ -92,7 +92,7 @@ We now attach a visual to every note (Wikimedia thumbnail when available, emoji 
 - Update card templates and styling (see **docs/card-images.md**).  
 - The pipeline uploads images to Anki via AnkiConnect (`storeMediaFile`), so visuals sync and work offline.
 
-**Docs:** see [`docs/card-images.md`](docs/card-images.md).
+**Docs:** see https://github.com/ksimons29/anki-portuguese-sayings/blob/main/docs-card-images.md
 
 **Commit hint**
 ```
