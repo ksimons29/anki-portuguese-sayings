@@ -48,7 +48,7 @@ sleep 3   # Wait a few seconds to ensure Anki and AnkiConnect are ready
 # ---- Run transformer (capture exit code instead of exec) ----
 set +e
 "$HOME/anki-tools/.venv/bin/python" -u "$HOME/anki-tools/transform_inbox_to_csv.py" \
-  --deck "Portuguese (pt-PT)" --model "GPT Vocabulary Automater"
+  --deck "Portuguese Mastery (pt-PT)" --model "GPT Vocabulary Automater"
 STATUS=$?
 set -e
 

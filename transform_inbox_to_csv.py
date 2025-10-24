@@ -42,7 +42,7 @@ MASTER_CSV = BASE / "sayings.csv"
 LAST_IMPORT = BASE / "last_import.csv"
 LOG_DIR = BASE / "logs"  # usage logs live here
 
-DEFAULT_DECK = "Portuguese (pt-PT)"
+DEFAULT_DECK = "Portuguese Mastery (pt-PT)"
 DEFAULT_MODEL = "GPT Vocabulary Automater"
 LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-4o-mini")
 ANKI_URL = os.environ.get("ANKI_URL", "http://127.0.0.1:8765")
