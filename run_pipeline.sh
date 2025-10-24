@@ -17,6 +17,21 @@ if pmset -g log | tail -n 80 | grep -q "Wake from Sleep"; then
   echo "[info] Detected recent system wake; this run may be a catch-up after sleep."
 fi
 
+# ---- Paths for the inbox + daily rotation marker ----
+ANKI_BASE="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki"
+INBOX="$ANKI_BASE/inbox"
+QUICK="$INBOX/quick.jsonl"
+TODAY="$(date +%F)"
+ROTATE_STAMP="$INBOX/.rotated-$TODAY"
+mkdir -p "$INBOX"
+
+# remove old stamps (keep only today's)
+for f in "$INBOX"/.rotated-*; do
+  [ -e "$f" ] || continue
+  [ "$(basename "$f")" = ".rotated-$TODAY" ] && continue
+  rm -f "$f"
+done
+
 # ---- Retrieve and load the OpenAI API key securely from the macOS Keychain ----
 # The key was previously stored under the service name "anki-tools-openai".
 export OPENAI_API_KEY="$(security find-generic-password -a "$USER" -s "anki-tools-openai" -w)"
@@ -30,6 +45,17 @@ sleep 3   # Wait a few seconds to ensure Anki and AnkiConnect are ready
 
 # ---- Run the main Python transformer that handles the Anki Automator ----
 # This script processes your iCloud inbox, generates C1 Portuguese sentences, 
-# and pushes them automatically into your Anki deck via AnkiConnect.
-exec "$HOME/anki-tools/.venv/bin/python" -u "$HOME/anki-tools/transform_inbox_to_csv.py" \
+# ---- Run transformer (capture exit code instead of exec) ----
+set +e
+"$HOME/anki-tools/.venv/bin/python" -u "$HOME/anki-tools/transform_inbox_to_csv.py" \
   --deck "Portuguese (pt-PT)" --model "GPT Vocabulary Automater"
+STATUS=$?
+set -e
+
+# ---- Daily delete on first successful run ----
+if [[ $STATUS -eq 0 && ! -f "$ROTATE_STAMP" ]]; then
+  echo "[rotate] status=$STATUS stamp=$ROTATE_STAMP quick=$QUICK"   # ← optional log line
+  : > "$QUICK"                                                      # truncate (or rm -f "$QUICK")
+  touch "$ROTATE_STAMP"
+  echo "[rotate] quick.jsonl cleared for $TODAY"
+fi
