@@ -104,23 +104,24 @@ The CSV columns are written in this exact order by the transformer and are inser
 - Audio: generated at review time with Anki TTS using `sentence_pt` (see template snippet below).
 
 ---
-
 ## 📁 Paths & files
 
+```text
 Portuguese/
 └─ Anki/
    ├─ inbox/
    │  ├─ quick.jsonl                  # daily inbox (cleared after first successful run each day)
    │  └─ .rotated-YYYY-MM-DD          # rotation stamp created on first successful run of the day
-   ├─ sayings.csv                      # cumulative log of all inserted items
-   ├─ last_import.csv                  # last batch snapshot
-   └─ logs/                            # optional: if you tee script output here
+   ├─ sayings.csv                     # cumulative log of all inserted items
+   ├─ last_import.csv                 # last batch snapshot
+   └─ logs/                           # optional: if you tee script output here
 
 
 ---
 
-Why TTS: This uses the platform’s pt-PT voice (e.g., Joana on macOS/iOS) to generate audio on-the-fly, keeping the collection small and guaranteeing that every `sentence_pt` is spoken. If you prefer pre-rendered files instead, generate audio during packaging and add a media field—but this project defaults to TTS for simplicity and portability.
+🔊 Why TTS?
 
+This uses the platform’s pt-PT voice (e.g., Joana on macOS/iOS) to generate audio on-the-fly, keeping the collection small and guaranteeing that every sentence_pt is spoken. If you prefer pre-rendered files instead, generate audio during packaging and add a media field — but this project defaults to TTS for simplicity and portability.
 
 ---
 
