@@ -1,5 +1,5 @@
 # 🇵🇹 Anki Portuguese Automation — Unified README
-*Updated: 2025-10-24*
+*Updated: 2025-10-25*
 
 End-to-end workflow to capture and automate Portuguese vocabulary from iPhone, iPad, or MacBook into Anki using GPT and AnkiConnect.  
 Enrich it to **C1-level European Portuguese**, and **load into Anki** via **AnkiConnect**.  
