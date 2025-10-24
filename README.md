@@ -107,9 +107,9 @@ The CSV columns are written in this exact order by the transformer and are inser
 word_en,word_pt,sentence_pt,sentence_en,date_added
 "computer mouse","rato","O rato sem fios ficou sem bateria durante a reunião de equipa.","The wireless mouse ran out of battery during the team meeting.","2025-10-23"
 ---
-
-## 📁 Paths & files
 ```
+## 📁 Paths & files
+
 Portuguese/
 └─ Anki/
    ├─ inbox/
@@ -118,10 +118,10 @@ Portuguese/
    ├─ sayings.csv                      # cumulative log of all inserted items
    ├─ last_import.csv                  # last batch snapshot
    └─ logs/                            # optional: if you tee script output here
-```
+
 
 ---
-
+```
 ```
 Why TTS: This uses the platform’s pt-PT voice (e.g., Joana on macOS/iOS) to generate audio on-the-fly, keeping the collection small and guaranteeing that every `sentence_pt` is spoken. If you prefer pre-rendered files instead, generate audio during packaging and add a media field—but this project defaults to TTS for simplicity and portability.
 
