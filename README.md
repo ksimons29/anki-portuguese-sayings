@@ -253,8 +253,6 @@ Recommended times: 09:00, 14:00, 20:00. Ensure the Mac is awake/logged in for ru
 ## 🔒 Key behavior: C1 enrichment
 The transformer prompts GPT to return **pt-PT** translation and a **C1-level** example sentence (≈12–22 words), aligned with your learning goal. This yields richer context and better recall.
 
-You can monitor token usage at **OpenAI Usage**: https://platform.openai.com/usage
-
 ---
 
 ## ✅ New: Daily inbox rotation (simple mode)
@@ -323,6 +321,56 @@ bash ~/anki-tools/run_pipeline.sh
 
 ---
 
+## Stopwords & Lemma Extraction
+
+Your import pipeline turns each raw entry from `quick.jsonl` into a concise **lemma** (the keyword you’ll learn).  
+This is handled by `extract_lemma()` together with the `_STOPWORDS` set in the script.
+
+### What are “stopwords” here?
+`_STOPWORDS` is a list of very common English words (e.g., *the, and, to, is, have, my, it*), plus a couple of domain-specific ones like **page/pages**.  
+These words carry little meaning on their own and are often safe to ignore when you want the *essence* of a phrase.
+
+```python
+# Used inside extract_lemma()
+remaining = [t for t in toks if t.lower() not in _STOPWORDS]
+```
+
+### Exact logic used by `extract_lemma(raw)`
+1. **Short phrases (≤ 3 tokens):** keep the phrase **as-is** (stopwords are **not** applied in this branch).
+2. **Pattern “to VERB”:** if we detect “to VERB” (e.g., “have to **print**”), choose that verb → `print`.
+3. **Otherwise (longer inputs):**
+   - Remove stopwords using the line above.
+   - If anything remains:
+     - If `"print"` is among them, return `"print"` (special case).
+     - Otherwise return the **longest remaining token** (simple “content word” heuristic).
+   - If nothing remains:
+     - If it looks like a long sentence with terminal punctuation, **skip** it.
+     - Else, **fallback** to the first 3 tokens.
+
+**Why this helps:** it strips filler like *the, to, is, my* so the chosen lemma is a meaningful content word (e.g., *airport*, *table*, *print*), which improves deduplication and gives cleaner prompts to the LLM.
+
+### Examples
+
+| Input                           | Tokens                              | After stopwords                | Result (lemma → rule)          |
+|---------------------------------|-------------------------------------|--------------------------------|---------------------------------|
+| `I have to print this page.`    | i, have, to, print, this, page      | *(“to VERB” rule triggers)*    | **print** → `to-VERB`           |
+| `we will be at the airport`     | we, will, be, at, the, airport      | **airport**                    | **airport** → `content-longest` |
+| `the red box on the table`      | the, red, box, on, the, table       | red, box, **table**            | **table** → `content-longest`   |
+| `that's it`                     | that’s, it                          | *(≤ 3 tokens; no stopwords)*   | **that’s it** → `short-phrase`  |
+
+> Note: Because short phrases (≤ 3 tokens) skip stopword removal, entries like “that’s it” are kept verbatim by design.
+
+### Edge cases & design choices
+- **English-only list:** `_STOPWORDS` is English. If you’ll input Portuguese here, consider adding a small PT list (e.g., `de, a, o, e, do, da, em, um, uma, para, com, por, que, no, na…`) to get similar behavior.
+- **“Longest remaining token” heuristic:** This favors nouns like *airport/table*. If you prefer a different behavior (e.g., “first remaining token” or “prefer verbs”), adjust the selection step.
+- **Special cases:** There’s a targeted special-case for `"print"` because it occurs frequently; you can add more if helpful.
+
+### Optional tweaks (if you ever want them)
+- **Also apply stopwords to short phrases:** Change the `len(toks) <= 3` branch to drop stopwords first; this would, for example, turn “that’s it” → “that’s” (or map it via an idiom list).
+- **Idiom map:** Add a small `_IDIOM_MAP` (e.g., `"that's it" → "done"`) and check it before the normal logic for predictable outcomes on common expressions.
+
+---
+
 ## 🧪 Quick checks
 - **Anki open?** Anki must be running so AnkiConnect can accept requests.
 - **Port free?** Nothing else should occupy 8765.
@@ -343,9 +391,11 @@ bash ~/anki-tools/run_pipeline.sh
 You can inspect token usage and costs at **OpenAI → Usage**:  
 https://platform.openai.com/usage
 
+
 ---
 
 ## 🧾 Change log
+- **2025-10-25** — Added transformation logic documentation how words are handled and system prompt info. Information is provided into the scientific method and Anki setup on how many words need to be studied daily. 
 - **2025-10-24** — Confirmed exact Anki note-type field names (`word_pt`, `word_en`, `sentence_pt`, `notes`, `image`). Added **Daily inbox rotation**; capture exit code in `run_pipeline.sh` (no `exec`); POSIX-safe cleanup of rotation stamps.
 - **2025-10-23** — Unified README wording; emphasized C1 pt-PT enrichment; clarified iCloud paths; verified AnkiConnect flow; expanded troubleshooting.
 - **2025-10-22** — Added OpenAI usage note and data contract section; clarified LaunchAgent schedule.
