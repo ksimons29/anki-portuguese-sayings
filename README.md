@@ -115,21 +115,13 @@ Portuguese/
    ├─ sayings.csv                     # cumulative log of all inserted items
    ├─ last_import.csv                 # last batch snapshot
    └─ logs/                           # optional: if you tee script output here
-
-
----
-
-🔊 Why TTS?
-
-This uses the platform’s pt-PT voice (e.g., Joana on macOS/iOS) to generate audio on-the-fly, keeping the collection small and guaranteeing that every sentence_pt is spoken. If you prefer pre-rendered files instead, generate audio during packaging and add a media field — but this project defaults to TTS for simplicity and portability.
+```
 
 ---
 
-## ⚙️ Requirements
-- **macOS** (tested on Apple Silicon).
-- **Anki** + **AnkiConnect** add-on (default port 8765).
-- **Python 3.10+** in a virtualenv for the transformer script.
-- **OpenAI API key** stored in **macOS Keychain** under service name `anki-tools-openai`.
+### 🔊 Why TTS?
+
+This uses the platform’s pt-PT voice (e.g., Joana on macOS/iOS) to generate audio on-the-fly, keeping the collection small and guaranteeing that every `sentence_pt` is spoken. If you prefer pre-rendered files instead, generate audio during packaging and add a media field — but this project defaults to TTS for simplicity and portability.
 
 ---
 
