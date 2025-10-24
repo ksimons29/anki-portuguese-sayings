@@ -1,9 +1,34 @@
 # 🇵🇹 Anki Portuguese Automation — Unified README
 *Updated: 2025-10-25*
 
-End-to-end workflow to capture and automate Portuguese vocabulary from iPhone, iPad, or MacBook into Anki using GPT and AnkiConnect.  
-Enrich it to **C1-level European Portuguese**, and **load into Anki** via **AnkiConnect**.  
-This README keeps your preferred unified structure and wording while aligning with the current codebase.
+# Portuguese Mastery (pt-PT)
+
+A clean, end-to-end pipeline that turns quick notes on your **iPhone, iPad, or Mac** into high-quality **Anki** cards—automatically.
+
+- ✍️ **Capture** → use the Shortcut **Save to AnkiInbox** (prompts you to type a word in **Portuguese or English**).
+- 🧠 **Normalize to a lemma** → smart rules + stopwords pick the meaningful keyword (see “Stopwords & Lemma Extraction” below).
+- 🇵🇹 **Enrich with GPT** → generates **C1-level European Portuguese** translation and a 12–22-word example sentence.
+- 🗂️ **Load into Anki** → notes are created via **AnkiConnect** using your `GPT Vocabulary Automater` note type.
+- 🖼️ **Visuals (optional)** → a backfill script can add Wikimedia images (with emoji fallback) to every note.
+- 🔄 **Sync everywhere** → study on mobile with Anki’s media sync.
+
+> **Default deck:** `Portuguese Mastery (pt-PT)` (configurable).
+
+---
+
+## Capture via Shortcut: **Save to AnkiInbox**
+
+This Shortcut is the only capture UI you need. When you tap it on iPhone/iPad/Mac:
+
+1. It **asks you to enter a single word or short phrase** (PT **or** EN).
+2. It **appends one JSON line** to your iCloud inbox file:
+
+- **Inbox file (JSONL):**  
+  `iCloud Drive / Portuguese / Anki / inbox / quick.jsonl`
+
+- **JSONL line format (produced by the Shortcut):**
+  ```json
+  {"word":"telemóvel"}
 
 ---
 
