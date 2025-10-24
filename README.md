@@ -235,6 +235,82 @@ security find-generic-password -a "$USER" -s "anki-tools-openai" -w | sed 's/\(.
 > If your note type currently uses other names, either rename them in Anki or update the field mapping in `transform_inbox_to_csv.py` to these exact keys.
 
 ---
+## LLM Prompts (System & User)
+
+This project uses a small, fixed prompt pair to generate European Portuguese vocabulary and example sentences.  
+The prompts live in `transform_inbox_to_csv.py` inside the `ask_llm()` function.
+
+### 📌 System Prompt (exact text)
+```text
+You are a meticulous European Portuguese (pt-PT) language expert. Return JSON only and use plain ASCII double quotes (") for all keys/strings; do not use smart quotes. Fields: word_en, word_pt, sentence_pt, sentence_en. sentence_pt must be idiomatic pt-PT, 12-22 words, C1 level. sentence_en is a natural English gloss.
+```
+
+### 🧑‍💻 User Prompt (template)
+```text
+Return ONLY valid JSON, no code fences.
+Keys: word_en, word_pt, sentence_pt, sentence_en.
+Target word: {word_en}
+```
+
+### 🔧 Call Parameters (defaults)
+- **Model:** `LLM_MODEL` env var (default: `gpt-4o-mini`)
+- **Temperature:** `0.2`
+- **top_p:** `0.95`
+- **max_tokens:** `300`
+
+### ✅ Expected Output (strict JSON)
+The model must return **only** a JSON object (no code fences, no prose), using **ASCII double quotes** for all strings:
+```json
+{
+  "word_en": "print",
+  "word_pt": "imprimir",
+  "sentence_pt": "Preciso de imprimir este documento antes da reunião de amanhã no escritório central.",
+  "sentence_en": "I need to print this document before tomorrow's meeting at the head office."
+}
+```
+
+### 🧠 Why these constraints?
+- **ASCII quotes only**: downstream JSON parsing is strict, and “smart quotes” would break it.
+- **No code fences / prose**: we extract JSON directly; any extra text causes parsing errors.
+- **C1, 12–22 words**: yields rich, idiomatic European Portuguese sentences that fit well on Anki cards.
+
+### 🔍 Where this lives (code)
+`transform_inbox_to_csv.py` → `ask_llm()`:
+- Builds the `system` and `user` strings above.
+- Calls the model with the parameters listed.
+- Parses the response; throws if any of the four required fields are missing.
+
+### 🧪 Mocking & Keys
+- Set `OPENAI_API_KEY` (or `AZURE_OPENAI_API_KEY`) to call a live model.
+- For offline/testing, set `MOCK_LLM=1` to return deterministic mock data.
+
+### 📊 Token Usage Logging
+Each run appends usage to:
+```
+~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs/tokens_YYYY-MM.csv
+```
+(columns: timestamp, model, calls, prompt_tokens, completion_tokens, total_tokens)
+
+### ✏️ How to change the prompt
+Edit the two variables in `ask_llm()`:
+```python
+system = (
+    "You are a meticulous European Portuguese (pt-PT) language expert. "
+    'Return JSON only and use plain ASCII double quotes (") for all keys/strings; '
+    "do not use smart quotes. "
+    "Fields: word_en, word_pt, sentence_pt, sentence_en. "
+    "sentence_pt must be idiomatic pt-PT, 12-22 words, C1 level. "
+    "sentence_en is a natural English gloss."
+)
+
+user = (
+    "Return ONLY valid JSON, no code fences. "
+    "Keys: word_en, word_pt, sentence_pt, sentence_en.\n"
+    f"Target word: {word_en.strip()}"
+)
+```
+> Keep the **JSON-only** and **ASCII quotes** constraints unless you also change the parsing code.
+---
 
 ## ▶️ Run it once
 ```bash
