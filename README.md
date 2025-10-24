@@ -102,10 +102,7 @@ The CSV columns are written in this exact order by the transformer and are inser
 - In Anki, set the model’s duplicate check to the first field (`word_en`) and scope to “Deck” (recommended).  
 - No media fields: images are handled statically in your Anki template (pipeline does not fetch images).  
 - Audio: generated at review time with Anki TTS using `sentence_pt` (see template snippet below).
-
-```csv
-word_en,word_pt,sentence_pt,sentence_en,date_added
-"computer mouse","rato","O rato sem fios ficou sem bateria durante a reunião de equipa.","The wireless mouse ran out of battery during the team meeting.","2025-10-23"
+```
 ---
 ```
 ## 📁 Paths & files
@@ -119,9 +116,9 @@ Portuguese/
    ├─ last_import.csv                  # last batch snapshot
    └─ logs/                            # optional: if you tee script output here
 
-
----
 ```
+---
+
 ```
 Why TTS: This uses the platform’s pt-PT voice (e.g., Joana on macOS/iOS) to generate audio on-the-fly, keeping the collection small and guaranteeing that every `sentence_pt` is spoken. If you prefer pre-rendered files instead, generate audio during packaging and add a media field—but this project defaults to TTS for simplicity and portability.
 
