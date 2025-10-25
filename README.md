@@ -125,6 +125,10 @@ Once these match, your Anki deck is **scientifically optimized for rapid acquisi
 
 ```mermaid
 flowchart LR
+  subgraph Shortcuts["iOS / iPadOS"]
+    S["Save to AnkiInbox (Shortcut)"]
+  end
+
   subgraph iCloud["iCloud Drive"]
     Q["quick.jsonl (inbox/)"]
   end
@@ -146,6 +150,10 @@ flowchart LR
     AC["AnkiConnect API (http://localhost:8765)"]
   end
 
+  %% new data source
+  S -->|append JSONL entry| Q
+
+  %% existing flow
   Q -->|scheduled| LA --> SH --> KC
   KC --> SH
   SH -->|launches| AK --> AC
