@@ -352,6 +352,7 @@ user = (
 ```bash
 bash ~/anki-tools/run_pipeline.sh
 ```
+
 You should see console logs like “Will process N item(s)” and “Anki addNotes added X/N”.
 
 ---
@@ -500,6 +501,20 @@ remaining = [t for t in toks if t.lower() not in _STOPWORDS]
 
 ---
 
+## 🔧 Automation Reliability (Mac LaunchAgent + `run_pipeline.sh`)
+
+These changes make the pipeline robust with iCloud Drive and AnkiConnect.
+
+### A) Script-level daily logging (instead of plist logging)
+Add at the very top of `run_pipeline.sh` (before any `echo`):
+```bash
+# Log everything to iCloud (one file per day)
+LOGDIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs"
+mkdir -p "$LOGDIR"
+exec >>"$LOGDIR/pipeline.$(date +%F).log" 2>>"$LOGDIR/pipeline.$(date +%F).err"
+
+---
+
 ## 🧪 Quick checks
 - **Anki open?** Anki must be running so AnkiConnect can accept requests.
 - **Port free?** Nothing else should occupy 8765.
@@ -524,6 +539,15 @@ https://platform.openai.com/usage
 ---
 
 ## 🧾 Change log
+- **2025-10-27** — Automation reliability hardening
+- **Switched to script-managed daily logs** in iCloud; removed plist log redirection.
+- **Initialized PATH** in `run_pipeline.sh` for Homebrew tools under launchd.
+- **Added network guard** (`require_network`) to skip runs when offline.
+- **Added AnkiConnect reachability check** (2s timeout) before API calls.
+- **Replaced direct truncate with atomic overwrite + retries** for `quick.jsonl` to tolerate iCloud’s short file locks.
+- **Fixed LaunchAgent ProgramArguments** to execute the updated script via `/bin/bash -lc`, with `KeepAlive: NetworkState=true`.
+- Result: stable, hands-free automation across Mac + iOS/iPadOS, with clean daily logs and safe inbox rotation.
+
 - **2025-10-25** — Added transformation logic documentation how words are handled and system prompt info. Information is provided into the scientific method and Anki setup on how many words need to be studied daily. 
 - **2025-10-24** — Confirmed exact Anki note-type field names (`word_pt`, `word_en`, `sentence_pt`, `notes`, `image`). Added **Daily inbox rotation**; capture exit code in `run_pipeline.sh` (no `exec`); POSIX-safe cleanup of rotation stamps.
 - **2025-10-23** — Unified README wording; emphasized C1 pt-PT enrichment; clarified iCloud paths; verified AnkiConnect flow; expanded troubleshooting.
