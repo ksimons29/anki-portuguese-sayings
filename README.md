@@ -231,6 +231,8 @@ If your note type uses different field names or order, update the model to match
 └─ logs/
    ├─ pipeline.YYYY-MM-DD.log      # main stdout log for each pipeline run
    └─ pipeline.YYYY-MM-DD.err      # stderr log for each pipeline run
+```
+
 ---
 
 ## 📦 Files overview (active + archived)
