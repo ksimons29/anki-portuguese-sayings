@@ -7,7 +7,6 @@ A clean, end-to-end pipeline that turns quick notes on your **iPhone, iPad, or M
 - 🧠 **Normalize to a lemma** → smart rules + stopwords pick the meaningful keyword (see “Stopwords & Lemma Extraction” below).
 - 🇵🇹 **Enrich with GPT** → generates **C1-level European Portuguese** translation and a 12–22-word example sentence.
 - 🗂️ **Load into Anki** → notes are created via **AnkiConnect** using your `GPT Vocabulary Automater` note type.
-- 🖼️ **Visuals (optional)** → a backfill script can add Wikimedia images (with emoji fallback) to every note.
 - 🔄 **Sync everywhere** → study on mobile/tablet/laptop with Anki’s media sync.
 
 > **Default deck:** `Portuguese Mastery (pt-PT)` (configurable).
