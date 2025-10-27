@@ -1,6 +1,5 @@
 # 🇵🇹 Anki Portuguese Automation — Unified README
-
-# Portuguese Mastery (pt-PT)
+## Status [![Last commit](https://img.shields.io/github/last-commit/ksimons29/anki-portuguese-sayings?label=Last%20updated&branch=main)](https://github.com/ksimons29/anki-portuguese-sayings/commits/main) 
 
 A clean, end-to-end pipeline that turns quick notes on your **iPhone, iPad, or Mac** into high-quality **Anki** cards—automatically.
 
@@ -20,6 +19,9 @@ A clean, end-to-end pipeline that turns quick notes on your **iPhone, iPad, or M
 This Shortcut is the only capture UI you need. When you tap it on iPhone/iPad/Mac:
 
 1. It **asks you to enter a single word or short phrase** (PT **or** EN).
+<img width="154" height="172" alt="Screenshot 2025-10-27 at 14 07 55" src="https://github.com/user-attachments/assets/5806640b-8f9f-4668-93ed-826bdb78e560" />
+<img width="590" height="580" alt="Screenshot 2025-10-27 at 14 08 30" src="https://github.com/user-attachments/assets/514a1047-c256-488a-83a3-86a6e41463e1" />
+
 2. It **appends one JSON line** to your iCloud inbox file:
 
 - **Inbox file (JSONL):**  
