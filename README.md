@@ -516,24 +516,6 @@ remaining = [t for t in toks if t.lower() not in _STOPWORDS]
 - **Idiom map:** Add a small `_IDIOM_MAP` (e.g., `"that's it" → "done"`) and check it before the normal logic for predictable outcomes on common expressions.
 
 ---
-### Network guard (skip run if offline) 
-Why: avoids noisy DNS failures during brief outages.
-# Helper
-require_network() {
-  local tries=6
-  while ! /sbin/ping -q -c1 -t1 1.1.1.1 >/dev/null 2>&1 ; do
-    tries=$((tries-1))
-    [ $tries -le 0 ] && { echo "[net] offline → skipping run"; return 1; }
-    echo "[net] no connectivity; retrying..."
-    sleep 10
-  done
-  return 0
-}
-
-# Use it (place after opening Anki)
-require_network || exit 0
-
----
 
 ## 🧪 Quick checks
 - **Anki open?** Anki must be running so AnkiConnect can accept requests.
