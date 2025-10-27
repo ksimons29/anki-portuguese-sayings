@@ -18,11 +18,12 @@ A clean, end-to-end pipeline that turns quick notes on your **iPhone, iPad, or M
 
 This Shortcut is the only capture UI you need. When you tap it on iPhone/iPad/Mac:
 
-1. It **asks you to enter a single word or short phrase** (PT **or** EN).
+1. It **asks you to enter a single word or short phrase via typing or dictating** (PT **or** EN).
+In the UI you are asked to speak or to type based on if you select Voice or Type. When selecting Voice you need to select Portuguese or English depending on the language you want to provide the word. 
 <img width="154" height="172" alt="Screenshot 2025-10-27 at 14 07 55" src="https://github.com/user-attachments/assets/5806640b-8f9f-4668-93ed-826bdb78e560" />
 <img width="590" height="580" alt="Screenshot 2025-10-27 at 14 08 30" src="https://github.com/user-attachments/assets/514a1047-c256-488a-83a3-86a6e41463e1" />
 
-2. It **appends one JSON line** to your iCloud inbox file:
+3. It **appends one JSON line** to your iCloud inbox file:
 
 - **Inbox file (JSONL):**  
   `iCloud Drive / Portuguese / Anki / inbox / quick.jsonl`
