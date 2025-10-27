@@ -36,6 +36,8 @@ In the UI you are asked to speak or to type based on if you select Voice or Type
   {"word":"telemóvel"}
 
 Done via the below shortcut structure to ensure it will only add one JSON line at a time and does not overwrite but attaches a new line after every save. 
+
+
 <img width="688" height="877" alt="image" src="https://github.com/user-attachments/assets/e2b9e2be-7fcc-48f8-ba3a-dba4f90ced2c" />
 <img width="712" height="574" alt="image" src="https://github.com/user-attachments/assets/c4dce7f2-e1de-4c3a-b289-61400e13ab67" />
 
