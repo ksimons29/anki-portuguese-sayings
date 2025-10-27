@@ -20,8 +20,7 @@ This Shortcut is the only capture UI you need. When you tap it on iPhone/iPad/Ma
 
 1. It **asks you to enter a single word or short phrase via typing or dictating** (PT **or** EN).
 In the UI you are asked to speak or to type based on if you select Voice or Type. When selecting Voice you need to select Portuguese or English depending on the language you want to provide the word. 
-<img width="688" height="877" alt="image" src="https://github.com/user-attachments/assets/e2b9e2be-7fcc-48f8-ba3a-dba4f90ced2c" />
-<img width="712" height="574" alt="image" src="https://github.com/user-attachments/assets/c4dce7f2-e1de-4c3a-b289-61400e13ab67" />
+
 
 
 
@@ -34,7 +33,8 @@ In the UI you are asked to speak or to type based on if you select Voice or Type
   ```json
   {"word":"telemóvel"}
 
-<img width="1822" height="1174" alt="image" src="https://github.com/user-attachments/assets/b444df8d-4692-4cd7-b168-c7a1c234b5a0" />
+<img width="688" height="877" alt="image" src="https://github.com/user-attachments/assets/e2b9e2be-7fcc-48f8-ba3a-dba4f90ced2c" />
+<img width="712" height="574" alt="image" src="https://github.com/user-attachments/assets/c4dce7f2-e1de-4c3a-b289-61400e13ab67" />
 
 
 ---
