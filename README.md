@@ -170,14 +170,13 @@ flowchart LR
 ```
 
 **Key design choices**
-- Security first: API key stored only in macOS Keychain and injected at runtime; env overrides (`OPENAI_BASE_URL`, etc.) are cleared.
-- Idempotent ingestion: The script normalizes and de-duplicates before generating or posting to Anki.
-- Append-only master CSV: `sayings.csv` is the canonical export; `last_import.csv` makes the latest batch easy to review or re-import.
-- 	•	Observable by default: Plain-text logs in iCloud simplify debugging:
-~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs/pipeline.YYYY-MM-DD.log
-~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs/pipeline.YYYY-MM-DD.err
+- **Security first.** API key is stored only in macOS Keychain and injected at runtime; legacy env overrides (`OPENAI_BASE_URL`, `OPENAI_API_BASE`, `OPENAI_ORG_ID`) are unset in the script.
+- **Idempotent ingestion.** The script normalizes and de-duplicates before any LLM calls or Anki posts.
+- **Append-only master CSV.** `sayings.csv` is the canonical log; `last_import.csv` snapshots the latest batch for quick review or re-import.
+- **Observable by default.** Plain-text logs are written to iCloud for easy debugging:
 
-Manual kickstart: bash ~/anki-tools/run_pipeline.sh
+Manual kickstart: `bash ~/anki-tools/run_pipeline.sh`
+
 1. **Capture**: You append JSONL lines to `quick.jsonl` from iPhone/iPad/Mac.
 2. **Inbox**: All raw inputs live in `.../Anki/inbox/quick.jsonl`.
 3. **Transform** (`transform_inbox_to_csv.py`):
@@ -186,31 +185,28 @@ Manual kickstart: bash ~/anki-tools/run_pipeline.sh
    - Appends one row per item to `sayings.csv` and writes `last_import.csv` snapshot.
    - Pushes the new notes into Anki via **AnkiConnect** (localhost:8765).
 4. **Review**: You study cards in Anki with spaced repetition.
-5. Review if the run was succesfull:
-bash LOGDIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs"
-tail -n 80 "$LOGDIR/pipeline.$(date +%F).err"; echo "----"; tail -n 80 "$LOGDIR/pipeline.$(date +%F).log" 
-> The goal is **idempotent**, low-friction ingestion that keeps your Anki deck authoritative.
-
-
 
 ---
 
 ## 🧾 Anki Card Data Contract (Note Model & Field Order)
 
 **Note type (model):** GPT Vocabulary Automater  
-**Default deck:** Portuguese (pt-PT)  
+**Default deck: Portuguese Mastery (pt-PT)
 **CSV source:** `sayings.csv` (UTF-8, comma-separated, quoted as needed)
 
 **Field order (must match exactly)**
-| Field           | Type   | Description                                       |
-|-----------------|--------|---------------------------------------------------|
-| `word_pt`       | text   | Portuguese headword/phrase (front).               |
-| `word_en`       | text   | English lemma/gloss (back helper).                |
-| `sentence_pt`   | text   | C1-level pt-PT example sentence (≈12–22 words).   |
-| `notes`         | text   | Optional hints, POS, synonyms.                    |
-| `image`         | media  | Optional image reference.                         |
 
-The CSV columns are written in this exact order by the transformer and are inserted into Anki in the same order. If your note type uses a different field order, update the model to match or map fields accordingly before importing.
+| Field         | Type | Description                                        |
+|---------------|------|----------------------------------------------------|
+| `word_en`     | text | English lemma/gloss (also used for duplicate check)|
+| `word_pt`     | text | Portuguese headword/phrase (front helper)         |
+| `sentence_pt` | text | C1-level pt-PT example sentence (≈12–22 words)    |
+| `sentence_en` | text | Natural English gloss of the sentence             |
+| `date_added`  | text | YYYY-MM-DD of the run                              |
+
+The transformer **writes CSV in exactly this order** and sends the same fields to Anki via AnkiConnect.  
+If your note type uses different field names or order, update the model to match these fields.
+
 
 **Format & constraints**
 - Encoding: UTF-8 only (the pipeline enforces UTF-8).  
@@ -357,11 +353,16 @@ user = (
 
 ## ▶️ Run it once
 ```bash
- ~/anki-tools/run_pipeline.sh
-```
-LaunchAgents inherit a minimal PATH; this ensures python3, curl, etc. are found.
-You should see console logs like “Will process N item(s)” and “Anki addNotes added X/N”.
+~/anki-tools/run_pipeline.sh
 
+Output is written to iCloud logs: 
+~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs/pipeline.YYYY-MM-DD.log
+~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs/pipeline.YYYY-MM-DD.err
+
+This version:
+- Keeps visual consistency (same fenced formatting style as other code paths).  
+- Clearly separates the log paths for easy reading on GitHub.  
+- Removes unnecessary lines so it looks clean and professional.
 ---
 
 ## ⏱️ Schedule & Keep-Awake (LaunchAgent + Amphetamine)
@@ -424,7 +425,8 @@ done
 ```bash
 # ---- Run transformer (capture exit code instead of exec) ----
 set +e
-"$HOME/anki-tools/.venv/bin/python" -u "$HOME/anki-tools/transform_inbox_to_csv.py"   --deck "Portuguese (pt-PT)" --model "GPT Vocabulary Automater"
+"$HOME/anki-tools/.venv/bin/python" -u "$HOME/anki-tools/transform_inbox_to_csv.py" \
+  --deck "Portuguese Mastery (pt-PT)" --model "GPT Vocabulary Automater"
 STATUS=$?
 set -e
 ```
