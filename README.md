@@ -250,11 +250,11 @@ pip install --upgrade pip
 ```
 
 ### 2) OpenAI key in Keychain
-```bash
-# Store the key (replace ... with your real key)
-security add-generic-password -a "$USER" -s "anki-tools-openai" -w "sk-..."
-# Quick check:
-security find-generic-password -a "$USER" -s "anki-tools-openai" -w | sed 's/\(.......\).*/.../'
+```
+# Store/Update the key in macOS Keychain
+security add-generic-password -a "$USER" -s "anki-tools-openai" -w 'sk-REDACTED' -U
+# Quick prefix check (shows first 6 chars only)
+security find-generic-password -a "$USER" -s "anki-tools-openai" -w | sed -E 's/^(.{6}).*/\1.../'
 ```
 
 ### 3) Anki + AnkiConnect
@@ -351,8 +351,7 @@ user = (
 
 ## ▶️ Run it once
 ```bash
-bash ~/anki-tools/run_pipeline.sh
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+ ~/anki-tools/run_pipeline.sh
 ```
 LaunchAgents inherit a minimal PATH; this ensures python3, curl, etc. are found.
 You should see console logs like “Will process N item(s)” and “Anki addNotes added X/N”.
@@ -426,10 +425,10 @@ set -e
 
 3) **Daily clear on first successful run** (truncates the file; logged once per day):
 ```bash
-# ---- Daily delete on first successful run ----
 if [[ $STATUS -eq 0 && ! -f "$ROTATE_STAMP" ]]; then
-  echo "[rotate] status=$STATUS stamp=$ROTATE_STAMP quick=$QUICK"   # optional log line
-  : > "$QUICK"                                                      # truncate; keeps path valid
+  echo "[rotate] status=$STATUS stamp=$ROTATE_STAMP quick=$QUICK"
+  mv -f "$QUICK" "$QUICK.$(date +%H%M%S).bak" 2>/dev/null || true
+  : > "$QUICK"
   touch "$ROTATE_STAMP"
   echo "[rotate] quick.jsonl cleared for $TODAY"
 fi
@@ -549,6 +548,9 @@ require_network || exit 0
 - **Anki addNotes added 0/N**: check note type + field names, or duplicate check settings.
 - **Connection refused**: open Anki; confirm AnkiConnect is enabled.
 - **Unexpected duplicates**: with duplicate check on `word_pt`, ensure the front text is truly identical. Homographs (e.g., *assassino* noun vs adj.) can be disambiguated with POS tags or parentheses.
+Quick logs command for users:
+bash LOGDIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs"
+tail -n 80 "$LOGDIR/pipeline.$(date +%F).err"; echo "----"; tail -n 80 "$LOGDIR/pipeline.$(date +%F).log"
 
 ---
 
