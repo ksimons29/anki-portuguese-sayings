@@ -36,7 +36,7 @@ iCloud Drive / Portuguese / Anki / inbox / quick.jsonl
 
 Guarantees
 	•	One entry per run (append mode with newline).
-	•	Stable, machine-friendly format for downstream processing.
+	•	Stable, machine-friendly format for downstream processing.  ```
 
 <img width="688" height="877" alt="image" src="https://github.com/user-attachments/assets/e2b9e2be-7fcc-48f8-ba3a-dba4f90ced2c" />
 <img width="712" height="574" alt="image" src="https://github.com/user-attachments/assets/c4dce7f2-e1de-4c3a-b289-61400e13ab67" />
