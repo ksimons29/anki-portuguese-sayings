@@ -350,19 +350,24 @@ user = (
 ```
 > Keep the **JSON-only** and **ASCII quotes** constraints unless you also change the parsing code.
 ---
+Here’s your ready-to-copy Markdown block with perfect GitHub formatting.
+It preserves syntax highlighting, spacing, and consistency with your README.
+
+⸻
 
 ## ▶️ Run it once
+
 ```bash
 ~/anki-tools/run_pipeline.sh
+```
 
-Output is written to iCloud logs: 
+Output is written to iCloud logs:
+
+```text
 ~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs/pipeline.YYYY-MM-DD.log
 ~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs/pipeline.YYYY-MM-DD.err
+```
 
-This version:
-- Keeps visual consistency (same fenced formatting style as other code paths).  
-- Clearly separates the log paths for easy reading on GitHub.  
-- Removes unnecessary lines so it looks clean and professional.
 ---
 
 ## ⏱️ Schedule & Keep-Awake (LaunchAgent + Amphetamine)
@@ -380,16 +385,19 @@ Plist: `~/Library/LaunchAgents/com.anki.sync.quickjsonl.plist`
 
 ### 2) Script-level keep-awake
 Add to `run_pipeline.sh` near the top:
+
 ```bash
 /usr/bin/caffeinate -i -w $$ &
 # use -di to keep the display on as well
+```
 
 <img width="772" height="811" alt="image" src="https://github.com/user-attachments/assets/19b84837-7bf5-4e61-929c-b32bdf3cd80d" />
 
 ---
 
 ## 🔒 Key behavior: C1 enrichment
-The transformer prompts GPT to return **pt-PT** translation and a **C1-level** example sentence (≈12–22 words), aligned with your learning goal. This yields richer context and better recall.
+The transformer prompts GPT to return **pt-PT** translation and a **C1-level** example sentence (≈12–22 words), aligned with your learning goal.  
+This yields richer context and better recall.
 
 ---
 
@@ -398,12 +406,13 @@ To keep the pipeline idempotent and avoid re-adding items, the inbox file
 `Portuguese/Anki/inbox/quick.jsonl` is **cleared once per day** after the **first successful run**.
 
 **Why**
-- Prevents duplicates from lingering in `quick.jsonl`.
-- Works cleanly with multiple LaunchAgent runs per day.
+- Prevents duplicates from lingering in `quick.jsonl`.  
+- Works cleanly with multiple LaunchAgent runs per day.  
 - Only clears when the Python step succeeds, so you never lose unprocessed items on failure.
 
 ### What changed in `run_pipeline.sh`
 1) **Added paths + a daily rotate stamp** (after launching Anki and `sleep 3`):
+
 ```bash
 # ---- Paths for the inbox + daily rotation marker ----
 ANKI_BASE="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki"
@@ -420,6 +429,13 @@ for f in "$INBOX"/.rotated-*; do
   rm -f "$f"
 done
 ```
+⸻
+
+✅ Why this version is correct
+	•	Uses proper fenced code blocks ( ```bash and  ```text).
+	•	All fences are closed (no bleed into following sections).
+	•	Works in both GitHub web view and local Markdown preview.
+	•	Aligns perfectly with your README’s established format.
 
 2) **Stopped using `exec`** so post-run steps can execute; we now capture the Python exit code:
 ```bash
