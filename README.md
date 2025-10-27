@@ -22,6 +22,7 @@ This Shortcut is the only capture UI you need. When you tap it on iPhone/iPad/Ma
 In the UI you are asked to speak or to type based on if you select Voice or Type. When selecting Voice you need to select Portuguese or English depending on the language you want to provide the word. 
 
 
+<img width="288" height="302" alt="image" src="https://github.com/user-attachments/assets/f1183c00-ce31-40ac-b8a6-9ab0ec4fa0b3" />
 
 
 3. It **appends one JSON line** to your iCloud inbox file:
