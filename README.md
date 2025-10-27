@@ -1,5 +1,4 @@
 # 🇵🇹 Anki Portuguese Automation — Unified README
-*Updated: 2025-10-25*
 
 # Portuguese Mastery (pt-PT)
 
@@ -351,8 +350,9 @@ user = (
 ## ▶️ Run it once
 ```bash
 bash ~/anki-tools/run_pipeline.sh
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 ```
-
+LaunchAgents inherit a minimal PATH; this ensures python3, curl, etc. are found.
 You should see console logs like “Will process N item(s)” and “Anki addNotes added X/N”.
 
 ---
@@ -450,6 +450,21 @@ bash ~/anki-tools/run_pipeline.sh
 ```
 
 ---
+## 🔧 Automation Reliability (Mac LaunchAgent + `run_pipeline.sh`)
+
+These changes make the pipeline robust with iCloud Drive and AnkiConnect.
+
+### A) Script-level daily logging (instead of plist logging)
+Add at the very top of `run_pipeline.sh` (before any `echo`):
+```bash
+# Log everything to iCloud (one file per day)
+LOGDIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs"
+mkdir -p "$LOGDIR"
+exec >>"$LOGDIR/pipeline.$(date +%F).log" 2>>"$LOGDIR/pipeline.$(date +%F).err"
+
+
+
+
 
 ## Stopwords & Lemma Extraction
 
@@ -500,18 +515,22 @@ remaining = [t for t in toks if t.lower() not in _STOPWORDS]
 - **Idiom map:** Add a small `_IDIOM_MAP` (e.g., `"that's it" → "done"`) and check it before the normal logic for predictable outcomes on common expressions.
 
 ---
+### Network guard (skip run if offline) 
+Why: avoids noisy DNS failures during brief outages.
+# Helper
+require_network() {
+  local tries=6
+  while ! /sbin/ping -q -c1 -t1 1.1.1.1 >/dev/null 2>&1 ; do
+    tries=$((tries-1))
+    [ $tries -le 0 ] && { echo "[net] offline → skipping run"; return 1; }
+    echo "[net] no connectivity; retrying..."
+    sleep 10
+  done
+  return 0
+}
 
-## 🔧 Automation Reliability (Mac LaunchAgent + `run_pipeline.sh`)
-
-These changes make the pipeline robust with iCloud Drive and AnkiConnect.
-
-### A) Script-level daily logging (instead of plist logging)
-Add at the very top of `run_pipeline.sh` (before any `echo`):
-```bash
-# Log everything to iCloud (one file per day)
-LOGDIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs"
-mkdir -p "$LOGDIR"
-exec >>"$LOGDIR/pipeline.$(date +%F).log" 2>>"$LOGDIR/pipeline.$(date +%F).err"
+# Use it (place after opening Anki)
+require_network || exit 0
 
 ---
 
