@@ -30,7 +30,6 @@ This Shortcut is your single capture UI on **iPhone**, **iPad**, and **Mac**.
 
 
 ### Inbox (JSONL) location
-```text
 iCloud Drive / Portuguese / Anki / inbox / quick.jsonl
 
 Guarantees
@@ -39,9 +38,6 @@ Guarantees
 
 <img width="1098" height="927" alt="image" src="https://github.com/user-attachments/assets/5e6aff3c-0f2c-48fe-b1c9-b3a4544dea30" />
 <img width="776" height="575" alt="image" src="https://github.com/user-attachments/assets/15bffdd5-0416-427a-bb2c-d5ac2c9ebc34" />
-
-
-
 
 ---
 
