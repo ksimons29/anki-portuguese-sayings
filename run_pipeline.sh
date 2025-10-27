@@ -23,6 +23,7 @@ echo "pwd=$(pwd)"
 
 # ---- Ensure PATH is sane under launchd (optional but recommended) ----
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+export PYTHONIOENCODING=UTF-8
 
 # ---- Network gate with short backoff (skip run if offline) ----
 require_network() {
@@ -78,10 +79,27 @@ for f in "$INBOX"/.rotated-*; do
   rm -f "$f"
 done
 
-# ---- Retrieve OpenAI API key securely from macOS Keychain ----
-export OPENAI_API_KEY="$(security find-generic-password -a "$USER" -s "anki-tools-openai" -w)"
-echo "key_prefix=${OPENAI_API_KEY:0:6}"   # only log first 6 chars
-unset OPENAI_BASE_URL OPENAI_API_BASE OPENAI_ORG_ID OPENAI_PROJECT
+# ---- Retrieve OpenAI API key (prefer env, else Keychain) ----
+if [[ -z "${OPENAI_API_KEY:-}" ]]; then
+  if KEY_FROM_KC="$(security find-generic-password -a "$USER" -s "anki-tools-openai" -w 2>/dev/null)"; then
+    export OPENAI_API_KEY="$KEY_FROM_KC"
+  else
+    echo "[err] OPENAI_API_KEY not set and Keychain item 'anki-tools-openai' not found."
+    echo "      Add it with: security add-generic-password -a \"$USER\" -s \"anki-tools-openai\" -w 'sk-...'"
+    exit 1
+  fi
+fi
+
+# Optional: only if you’ve stored a separate project id (not needed for sk-proj- keys)
+if [[ -z "${OPENAI_PROJECT:-}" ]]; then
+  OPENAI_PROJECT="$(security find-generic-password -a "$USER" -s "anki-tools-openai-project" -w 2>/dev/null || true)"
+  [[ -n "$OPENAI_PROJECT" ]] && export OPENAI_PROJECT
+fi
+
+# Avoid legacy var conflicts
+unset OPENAI_BASE_URL OPENAI_API_BASE OPENAI_ORG_ID
+# Minimal diagnostics (safe prefix only)
+echo "key_prefix=${OPENAI_API_KEY:0:6} project=${OPENAI_PROJECT:-<none>}"
 
 # ---- Ensure Anki is open (quietly launches the app if not running) ----
 open -gj -a "Anki" || true
@@ -104,10 +122,8 @@ set -e
 # ---- Daily clear on first successful run (atomic, iCloud-safe) ----
 if [[ $STATUS -eq 0 && ! -f "$ROTATE_STAMP" ]]; then
   echo "[rotate] status=$STATUS stamp=$ROTATE_STAMP quick=$QUICK"
-  if { printf ''; } | atomic_overwrite "$QUICK" ; then
-    touch "$ROTATE_STAMP"
-    echo "[rotate] quick.jsonl cleared for $TODAY"
-  else
-    echo "[rotate] quick.jsonl locked; keeping inbox intact"
-  fi
+  mv -f "$QUICK" "$QUICK.$(date +%H%M%S).bak" 2>/dev/null || true
+  : > "$QUICK"
+  touch "$ROTATE_STAMP"
+  echo "[rotate] quick.jsonl cleared for $TODAY"
 fi
