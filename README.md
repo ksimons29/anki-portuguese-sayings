@@ -373,7 +373,7 @@ Output is written to iCloud logs:
 ## ⏱️ Schedule & Keep-Awake (LaunchAgent + Amphetamine)
 
 **When it runs:**  
-The LaunchAgent triggers the pipeline at **09:00, 13:00, 17:00, 21:00** (user session required).
+LaunchAgent triggers at **09:00, 13:00, 17:00, 21:00** (user session required).
 
 **Why two layers?**  
 - `caffeinate` ties “no sleep” directly to the script → rock-solid during execution.  
@@ -384,7 +384,7 @@ Plist: `~/Library/LaunchAgents/com.anki.sync.quickjsonl.plist`
 `StartCalendarInterval` → `[{Hour:9,Minute:0},{Hour:13,Minute:0},{Hour:17,Minute:0},{Hour:21,Minute:0}]`
 
 ### 2) Script-level keep-awake
-Add to `run_pipeline.sh` near the top:
+Add near the top of `run_pipeline.sh`:
 
 ```bash
 /usr/bin/caffeinate -i -w $$ &
