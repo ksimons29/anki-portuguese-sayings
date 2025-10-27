@@ -355,65 +355,65 @@ It preserves syntax highlighting, spacing, and consistency with your README.
 
 ⸻
 
-
 ## ▶️ Run it once
+
 ```bash
 ~/anki-tools/run_pipeline.sh
+```
 
 Output is written to iCloud logs:
 
+```text
 ~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs/pipeline.YYYY-MM-DD.log
 ~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs/pipeline.YYYY-MM-DD.err
+```
 
+---
 
-⸻
+## ⏱️ Schedule & Keep-Awake (LaunchAgent + Amphetamine)
 
-⏱️ Schedule & Keep-Awake (LaunchAgent + Amphetamine)
+**When it runs:**  
+The LaunchAgent triggers the pipeline at **09:00, 13:00, 17:00, 21:00** (user session required).
 
-When it runs:
-The LaunchAgent triggers the pipeline at 09:00, 13:00, 17:00, 21:00 (user session required).
+**Why two layers?**  
+- `caffeinate` ties “no sleep” directly to the script → rock-solid during execution.  
+- Amphetamine adds a small **keep-awake window** around each time in case the Mac was about to idle.
 
-Why two layers?
-	•	caffeinate ties “no sleep” directly to the script → rock-solid during execution.
-	•	Amphetamine adds a small keep-awake window around each time in case the Mac was about to idle.
+### 1) LaunchAgent (times)
+Plist: `~/Library/LaunchAgents/com.anki.sync.quickjsonl.plist`  
+`StartCalendarInterval` → `[{Hour:9,Minute:0},{Hour:13,Minute:0},{Hour:17,Minute:0},{Hour:21,Minute:0}]`
 
-1) LaunchAgent (times)
+### 2) Script-level keep-awake
+Add to `run_pipeline.sh` near the top:
 
-Plist: ~/Library/LaunchAgents/com.anki.sync.quickjsonl.plist
-StartCalendarInterval → [{Hour:9,Minute:0},{Hour:13,Minute:0},{Hour:17,Minute:0},{Hour:21,Minute:0}]
-
-2) Script-level keep-awake
-
-Add to run_pipeline.sh near the top:
-
+```bash
 /usr/bin/caffeinate -i -w $$ &
 # use -di to keep the display on as well
+```
 
 <img width="772" height="811" alt="image" src="https://github.com/user-attachments/assets/19b84837-7bf5-4e61-929c-b32bdf3cd80d" />
 
+---
 
+## 🔒 Key behavior: C1 enrichment
+The transformer prompts GPT to return **pt-PT** translation and a **C1-level** example sentence (≈12–22 words), aligned with your learning goal.  
+This yields richer context and better recall.
 
-⸻
+---
 
-🔒 Key behavior: C1 enrichment
+## ✅ New: Daily inbox rotation (simple mode)
+To keep the pipeline idempotent and avoid re-adding items, the inbox file  
+`Portuguese/Anki/inbox/quick.jsonl` is **cleared once per day** after the **first successful run**.
 
-The transformer prompts GPT to return pt-PT translation and a C1-level example sentence (≈12–22 words), aligned with your learning goal. This yields richer context and better recall.
+**Why**
+- Prevents duplicates from lingering in `quick.jsonl`.  
+- Works cleanly with multiple LaunchAgent runs per day.  
+- Only clears when the Python step succeeds, so you never lose unprocessed items on failure.
 
-⸻
+### What changed in `run_pipeline.sh`
+1) **Added paths + a daily rotate stamp** (after launching Anki and `sleep 3`):
 
-✅ New: Daily inbox rotation (simple mode)
-
-To keep the pipeline idempotent and avoid re-adding items, the inbox file
-Portuguese/Anki/inbox/quick.jsonl is cleared once per day after the first successful run.
-
-Why
-	•	Prevents duplicates from lingering in quick.jsonl.
-	•	Works cleanly with multiple LaunchAgent runs per day.
-	•	Only clears when the Python step succeeds, so you never lose unprocessed items on failure.
-
-What changed in run_pipeline.sh
-	1.	Added paths + a daily rotate stamp (after launching Anki and sleep 3):
-
+```bash
 # ---- Paths for the inbox + daily rotation marker ----
 ANKI_BASE="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki"
 INBOX="$ANKI_BASE/inbox"
@@ -428,8 +428,7 @@ for f in "$INBOX"/.rotated-*; do
   [ "$(basename "$f")" = ".rotated-$TODAY" ] && continue
   rm -f "$f"
 done
-
-
+```
 ⸻
 
 ✅ Why this version is correct
