@@ -250,9 +250,10 @@ pip install --upgrade pip
 ```
 
 ### 2) OpenAI key in Keychain
-```
+```bash
 # Store/Update the key in macOS Keychain
 security add-generic-password -a "$USER" -s "anki-tools-openai" -w 'sk-REDACTED' -U
+
 # Quick prefix check (shows first 6 chars only)
 security find-generic-password -a "$USER" -s "anki-tools-openai" -w | sed -E 's/^(.{6}).*/\1.../'
 ```
