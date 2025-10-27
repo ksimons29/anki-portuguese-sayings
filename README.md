@@ -142,7 +142,7 @@ flowchart LR
     SH["run_pipeline.sh"]
     PY["transform_inbox_to_csv.py"]
     VENV["Python venv"]
-    LOG["/tmp/anki_vocab_sync.*"]
+    LOG["iCloud logs (pipeline.YYYY-MM-DD.*)"]
   end
 
   subgraph Secrets["Secrets"]
@@ -173,8 +173,11 @@ flowchart LR
 - Security first: API key stored only in macOS Keychain and injected at runtime; env overrides (`OPENAI_BASE_URL`, etc.) are cleared.
 - Idempotent ingestion: The script normalizes and de-duplicates before generating or posting to Anki.
 - Append-only master CSV: `sayings.csv` is the canonical export; `last_import.csv` makes the latest batch easy to review or re-import.
-- Observable by default: Plain-text logs in `/tmp` simplify debugging; a manual kickstart exists for one-off runs.
+- 	•	Observable by default: Plain-text logs in iCloud simplify debugging:
+~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs/pipeline.YYYY-MM-DD.log
+~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs/pipeline.YYYY-MM-DD.err
 
+Manual kickstart: bash ~/anki-tools/run_pipeline.sh
 1. **Capture**: You append JSONL lines to `quick.jsonl` from iPhone/iPad/Mac.
 2. **Inbox**: All raw inputs live in `.../Anki/inbox/quick.jsonl`.
 3. **Transform** (`transform_inbox_to_csv.py`):
@@ -183,7 +186,9 @@ flowchart LR
    - Appends one row per item to `sayings.csv` and writes `last_import.csv` snapshot.
    - Pushes the new notes into Anki via **AnkiConnect** (localhost:8765).
 4. **Review**: You study cards in Anki with spaced repetition.
-
+5. Review if the run was succesfull:
+bash LOGDIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs"
+tail -n 80 "$LOGDIR/pipeline.$(date +%F).err"; echo "----"; tail -n 80 "$LOGDIR/pipeline.$(date +%F).log" 
 > The goal is **idempotent**, low-friction ingestion that keeps your Anki deck authoritative.
 
 
