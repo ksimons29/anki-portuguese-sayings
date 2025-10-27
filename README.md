@@ -232,7 +232,27 @@ Portuguese/
 ```
 
 ---
+## 📦 Files overview (active + archived)
 
+| Path / File | Purpose (one line) | Used at runtime? |
+|--------------|--------------------|------------------|
+| `~/anki-tools/run_pipeline.sh` | Main shell orchestrator: keeps Mac awake, retrieves OpenAI key, launches Anki, runs the Python transformer, logs output, and rotates inbox. | ✅ Yes |
+| `~/anki-tools/transform_inbox_to_csv.py` | Core transformer: reads `quick.jsonl`, enriches terms with pt-PT + C1 examples, writes `sayings.csv`, updates `last_import.csv`, and syncs with AnkiConnect. | ✅ Yes |
+| `~/anki-tools/_openai_compat.py` | Compatibility shim that wraps the OpenAI API calls to support both old and new SDK versions; imported internally by `transform_inbox_to_csv.py`. | ✅ Yes |
+| `~/anki-tools/merge_inbox.sh` | Utility to merge multiple `quick.jsonl` fragments into one inbox file before processing; used manually for cleanup. | ⚙️ Optional / manual |
+| `~/Library/LaunchAgents/com.anki.sync.quickjsonl.plist` | Active LaunchAgent that triggers `run_pipeline.sh` automatically at defined times (09:00, 13:00, 17:00, 21:00). | ✅ Yes |
+| `~/Library/LaunchAgents/com.anki.sync.quickjsonl.plist.bak` | Backup of the LaunchAgent configuration before recent edits (safe to delete or keep for rollback). | 🚫 Not used |
+| `~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/inbox/quick.jsonl` | iCloud-synced inbox where your Shortcut adds new entries; consumed once per day by the pipeline. | ✅ Yes |
+| `~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/inbox/.rotated-YYYY-MM-DD` | Daily marker file preventing duplicate runs within the same day. | ✅ Yes |
+| `~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/sayings.csv` | Master vocabulary log containing all processed and enriched entries. | ✅ Yes |
+| `~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/last_import.csv` | Snapshot of the most recent processed batch for quick inspection or debugging. | ✅ Yes |
+| `~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs/pipeline.YYYY-MM-DD.log` | Standard output log for each pipeline run (rotated daily). | ✅ Yes |
+| `~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs/pipeline.YYYY-MM-DD.err` | Error/stderr log for each pipeline run (rotated daily). | ✅ Yes |
+| `Keychain item: anki-tools-openai` | Securely stores your classic OpenAI API key (`sk-…`) for access by the pipeline. | ✅ Yes |
+| `~/anki-tools/.venv/` | Python virtual environment containing dependencies (`openai`, `requests`, etc.). | ✅ Yes |
+| `~/anki-tools/archive/` | Folder for deprecated helpers (`check_openai_key.py`, `import_all.sh`, `check_anki_adds_today.py`, etc.); preserved for reference only. | 🚫 Not used |
+
+---
 ### 🔊 Why TTS?
 
 This uses the platform’s pt-PT voice (e.g., Joana on macOS/iOS) to generate audio on-the-fly, keeping the collection small and guaranteeing that every `sentence_pt` is spoken. If you prefer pre-rendered files instead, generate audio during packaging and add a media field — but this project defaults to TTS for simplicity and portability.
