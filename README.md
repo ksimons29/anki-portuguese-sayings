@@ -54,7 +54,7 @@ This Shortcut is the only capture UI you need. When you tap it on iPhone/iPad/Ma
 **Goal:** maximize long-term Portuguese retention through evidence-based spaced repetition.  
 **Applies to:** Anki on macOS (Desktop) and iOS/iPadOS (AnkiMobile).  
 **Preset name:** `Portuguese Mastery (pt-PT)`  
-**Scheduler:** [FSRS – Free Spaced Repetition Scheduler](https://fsrs.io)
+**Scheduler:** [FSRS – Free Spaced Repetition Scheduler](https://www.reddit.com/r/Anki/comments/15mab3r/fsrs_explained_part_1_what_it_is_and_how_it_works/)
 
 ---
 
