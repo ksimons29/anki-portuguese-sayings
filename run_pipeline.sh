@@ -24,6 +24,7 @@ echo "pwd=$(pwd)"
 # ---- Ensure PATH is sane under launchd (optional but recommended) ----
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 export PYTHONIOENCODING=UTF-8
+set +x 2>/dev/null || true
 
 # ---- Network gate with short backoff (skip run if offline) ----
 require_network() {
@@ -90,16 +91,12 @@ if [[ -z "${OPENAI_API_KEY:-}" ]]; then
   fi
 fi
 
-# Optional: only if you’ve stored a separate project id (not needed for sk-proj- keys)
-if [[ -z "${OPENAI_PROJECT:-}" ]]; then
-  OPENAI_PROJECT="$(security find-generic-password -a "$USER" -s "anki-tools-openai-project" -w 2>/dev/null || true)"
-  [[ -n "$OPENAI_PROJECT" ]] && export OPENAI_PROJECT
-fi
+# (no  logic)
 
 # Avoid legacy var conflicts
 unset OPENAI_BASE_URL OPENAI_API_BASE OPENAI_ORG_ID
 # Minimal diagnostics (safe prefix only)
-echo "key_prefix=${OPENAI_API_KEY:0:6} project=${OPENAI_PROJECT:-<none>}"
+echo "key_prefix=${OPENAI_API_KEY:0:6}"
 
 # ---- Ensure Anki is open (quietly launches the app if not running) ----
 open -gj -a "Anki" || true
