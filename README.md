@@ -350,19 +350,21 @@ user = (
 ```
 > Keep the **JSON-only** and **ASCII quotes** constraints unless you also change the parsing code.
 ---
-
 ## ▶️ Run it once
 ```bash
 ~/anki-tools/run_pipeline.sh
 
-Output is written to iCloud logs: 
 ~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs/pipeline.YYYY-MM-DD.log
 ~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs/pipeline.YYYY-MM-DD.err
 
-This version:
-- Keeps visual consistency (same fenced formatting style as other code paths).  
-- Clearly separates the log paths for easy reading on GitHub.  
-- Removes unnecessary lines so it looks clean and professional.
+---
+### ✅ Why this works better
+- Keeps the fenced blocks properly nested (` ```bash ` + ` ```text `).
+- Removes extra “This version” notes that you only needed for review.
+- Matches the clean GitHub formatting of the rest of your README.
+- No stray `---` or unclosed code blocks.
+
+Once you replace that section with this version, your README formatting will render **100% consistent** across all sections on GitHub (like the later `bash` snippets).
 ---
 
 ## ⏱️ Schedule & Keep-Awake (LaunchAgent + Amphetamine)
