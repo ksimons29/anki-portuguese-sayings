@@ -1,6 +1,6 @@
 # 🇵🇹 Anki Portuguese Automation — Unified README
-![Last commit](https://img.shields.io/github/last-commit/OWNER/REPO?label=Last%20updated)
-# Portuguese Mastery (pt-PT)
+## Status
+Last updated: <!--LAST_UPDATED-->1970-01-01 00:00 CET<!--/LAST_UPDATED--># Portuguese Mastery (pt-PT)
 
 A clean, end-to-end pipeline that turns quick notes on your **iPhone, iPad, or Mac** into high-quality **Anki** cards—automatically.
 
