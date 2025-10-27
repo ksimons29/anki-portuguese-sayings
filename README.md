@@ -16,17 +16,16 @@ A clean, end-to-end pipeline that turns quick notes on your **iPhone, iPad, or M
 
 ## Capture via Shortcut: **Save to AnkiInbox**
 
-This Shortcut is the only capture UI you need. When you tap it on iPhone/iPad/Mac:
-
-1. It **asks you to enter a single word or short phrase via typing or dictating** (PT **or** EN).
-In the UI you are asked to speak or to type based on if you select Voice or Type. When selecting Voice you need to select Portuguese or English depending on the language you want to provide the word. 
+1. How it works? 
+	•	On run, you choose Voice or Type.
+	•	If you pick Voice, select Portuguese (Portugal) or English (US) and speak a single word or short phrase.
+	•	If you pick Type, enter the word/phrase manually.
 
 <img width="288" height="302" alt="image" src="https://github.com/user-attachments/assets/f1183c00-ce31-40ac-b8a6-9ab0ec4fa0b3" /><img src="https://github.com/user-attachments/assets/7b40c9a6-8924-4dd7-9ea9-f76f7b72daf4" alt="image" width="600" height="374" />
 <img src="https://github.com/user-attachments/assets/5bf48050-a8b8-4115-b13f-727d547c7eca" alt="image" width="600" height="976" />
 
 
-
-3. It **appends one JSON line** to your iCloud inbox file:
+2. The Shortcut appends one JSON line (newline-terminated) to your iCloud inbox — it never overwrites the file.
 
 - **Inbox file (JSONL):**  
   `iCloud Drive / Portuguese / Anki / inbox / quick.jsonl`
@@ -35,8 +34,9 @@ In the UI you are asked to speak or to type based on if you select Voice or Type
   ```json
   {"word":"telemóvel"}
 
-Done via the below shortcut structure to ensure it will only add one JSON line at a time and does not overwrite but attaches a new line after every save. 
-
+Why this structure
+	•	Ensures exactly one entry per run (append mode with newline).
+	•	Keeps the format stable and easy to process downstream.
 
 <img width="688" height="877" alt="image" src="https://github.com/user-attachments/assets/e2b9e2be-7fcc-48f8-ba3a-dba4f90ced2c" />
 <img width="712" height="574" alt="image" src="https://github.com/user-attachments/assets/c4dce7f2-e1de-4c3a-b289-61400e13ab67" />
