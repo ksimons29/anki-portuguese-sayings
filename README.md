@@ -218,20 +218,21 @@ If your note type uses different field names or order, update the model to match
 - Audio: generated at review time with Anki TTS using `sentence_pt` (see template snippet below).
 
 ---
+
 ## 📁 Paths & files
 
 ```text
-Portuguese/
-└─ Anki/
-   ├─ inbox/
-   │  ├─ quick.jsonl                  # daily inbox (cleared after first successful run each day)
-   │  └─ .rotated-YYYY-MM-DD          # rotation stamp created on first successful run of the day
-   ├─ sayings.csv                     # cumulative log of all inserted items
-   ├─ last_import.csv                 # last batch snapshot
-   └─ logs/                           # optional: if you tee script output here
-```
-
+~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/
+├─ inbox/
+│  ├─ quick.jsonl                  # iCloud inbox; Shortcut appends new entries here
+│  └─ .rotated-YYYY-MM-DD          # daily rotation stamp created after a successful run
+├─ sayings.csv                     # cumulative log of all enriched vocabulary entries
+├─ last_import.csv                 # snapshot of the most recent processed batch
+└─ logs/
+   ├─ pipeline.YYYY-MM-DD.log      # main stdout log for each pipeline run
+   └─ pipeline.YYYY-MM-DD.err      # stderr log for each pipeline run
 ---
+
 ## 📦 Files overview (active + archived)
 
 | Path / File | Purpose (one line) | Used at runtime? |
