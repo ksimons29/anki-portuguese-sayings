@@ -30,6 +30,9 @@ This Shortcut is the only capture UI you need. When you tap it on iPhone/iPad/Ma
   ```json
   {"word":"telemóvel"}
 
+<img width="1822" height="1174" alt="image" src="https://github.com/user-attachments/assets/b444df8d-4692-4cd7-b168-c7a1c234b5a0" />
+
+
 ---
 
 ## 🧭 What this does (in 30 seconds)
