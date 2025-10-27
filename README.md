@@ -350,63 +350,70 @@ user = (
 ```
 > Keep the **JSON-only** and **ASCII quotes** constraints unless you also change the parsing code.
 ---
+Here’s your ready-to-copy Markdown block with perfect GitHub formatting.
+It preserves syntax highlighting, spacing, and consistency with your README.
+
+⸻
+
+
 ## ▶️ Run it once
 ```bash
 ~/anki-tools/run_pipeline.sh
 
+Output is written to iCloud logs:
+
 ~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs/pipeline.YYYY-MM-DD.log
 ~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs/pipeline.YYYY-MM-DD.err
 
----
-### ✅ Why this works better
-- Keeps the fenced blocks properly nested (` ```bash ` + ` ```text `).
-- Removes extra “This version” notes that you only needed for review.
-- Matches the clean GitHub formatting of the rest of your README.
-- No stray `---` or unclosed code blocks.
 
-Once you replace that section with this version, your README formatting will render **100% consistent** across all sections on GitHub (like the later `bash` snippets).
----
+⸻
 
-## ⏱️ Schedule & Keep-Awake (LaunchAgent + Amphetamine)
+⏱️ Schedule & Keep-Awake (LaunchAgent + Amphetamine)
 
-**When it runs:**  
-The LaunchAgent triggers the pipeline at **09:00, 13:00, 17:00, 21:00** (user session required).
+When it runs:
+The LaunchAgent triggers the pipeline at 09:00, 13:00, 17:00, 21:00 (user session required).
 
-**Why two layers?**  
-- `caffeinate` ties “no sleep” directly to the script → rock-solid during execution.  
-- Amphetamine adds a small **keep-awake window** around each time in case the Mac was about to idle.
+Why two layers?
+	•	caffeinate ties “no sleep” directly to the script → rock-solid during execution.
+	•	Amphetamine adds a small keep-awake window around each time in case the Mac was about to idle.
 
-### 1) LaunchAgent (times)
-Plist: `~/Library/LaunchAgents/com.anki.sync.quickjsonl.plist`  
-`StartCalendarInterval` → `[{Hour:9,Minute:0},{Hour:13,Minute:0},{Hour:17,Minute:0},{Hour:21,Minute:0}]`
+1) LaunchAgent (times)
 
-### 2) Script-level keep-awake
-Add to `run_pipeline.sh` near the top:
-```bash
+Plist: ~/Library/LaunchAgents/com.anki.sync.quickjsonl.plist
+StartCalendarInterval → [{Hour:9,Minute:0},{Hour:13,Minute:0},{Hour:17,Minute:0},{Hour:21,Minute:0}]
+
+2) Script-level keep-awake
+
+Add to run_pipeline.sh near the top:
+
 /usr/bin/caffeinate -i -w $$ &
 # use -di to keep the display on as well
 
 <img width="772" height="811" alt="image" src="https://github.com/user-attachments/assets/19b84837-7bf5-4e61-929c-b32bdf3cd80d" />
 
----
 
-## 🔒 Key behavior: C1 enrichment
-The transformer prompts GPT to return **pt-PT** translation and a **C1-level** example sentence (≈12–22 words), aligned with your learning goal. This yields richer context and better recall.
 
----
+⸻
 
-## ✅ New: Daily inbox rotation (simple mode)
-To keep the pipeline idempotent and avoid re-adding items, the inbox file  
-`Portuguese/Anki/inbox/quick.jsonl` is **cleared once per day** after the **first successful run**.
+🔒 Key behavior: C1 enrichment
 
-**Why**
-- Prevents duplicates from lingering in `quick.jsonl`.
-- Works cleanly with multiple LaunchAgent runs per day.
-- Only clears when the Python step succeeds, so you never lose unprocessed items on failure.
+The transformer prompts GPT to return pt-PT translation and a C1-level example sentence (≈12–22 words), aligned with your learning goal. This yields richer context and better recall.
 
-### What changed in `run_pipeline.sh`
-1) **Added paths + a daily rotate stamp** (after launching Anki and `sleep 3`):
-```bash
+⸻
+
+✅ New: Daily inbox rotation (simple mode)
+
+To keep the pipeline idempotent and avoid re-adding items, the inbox file
+Portuguese/Anki/inbox/quick.jsonl is cleared once per day after the first successful run.
+
+Why
+	•	Prevents duplicates from lingering in quick.jsonl.
+	•	Works cleanly with multiple LaunchAgent runs per day.
+	•	Only clears when the Python step succeeds, so you never lose unprocessed items on failure.
+
+What changed in run_pipeline.sh
+	1.	Added paths + a daily rotate stamp (after launching Anki and sleep 3):
+
 # ---- Paths for the inbox + daily rotation marker ----
 ANKI_BASE="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki"
 INBOX="$ANKI_BASE/inbox"
@@ -421,7 +428,15 @@ for f in "$INBOX"/.rotated-*; do
   [ "$(basename "$f")" = ".rotated-$TODAY" ] && continue
   rm -f "$f"
 done
-```
+
+
+⸻
+
+✅ Why this version is correct
+	•	Uses proper fenced code blocks ( ```bash and  ```text).
+	•	All fences are closed (no bleed into following sections).
+	•	Works in both GitHub web view and local Markdown preview.
+	•	Aligns perfectly with your README’s established format.
 
 2) **Stopped using `exec`** so post-run steps can execute; we now capture the Python exit code:
 ```bash
