@@ -22,8 +22,9 @@ This Shortcut is the only capture UI you need. When you tap it on iPhone/iPad/Ma
 In the UI you are asked to speak or to type based on if you select Voice or Type. When selecting Voice you need to select Portuguese or English depending on the language you want to provide the word. 
 
 
-<img width="288" height="302" alt="image" src="https://github.com/user-attachments/assets/f1183c00-ce31-40ac-b8a6-9ab0ec4fa0b3" /><img width="1179" height="736" alt="image" src="https://github.com/user-attachments/assets/7b40c9a6-8924-4dd7-9ea9-f76f7b72daf4" />
-<img width="1179" height="1916" alt="image" src="https://github.com/user-attachments/assets/5bf48050-a8b8-4115-b13f-727d547c7eca" />
+<img width="288" height="302" alt="image" src="https://github.com/user-attachments/assets/f1183c00-ce31-40ac-b8a6-9ab0ec4fa0b3" />
+<img width="600" height="350" alt="image" src="https://github.com/user-attachments/assets/7b40c9a6-8924-4dd7-9ea9-f76f7b72daf4" />
+<img width="600" height="350" alt="image" src="https://github.com/user-attachments/assets/5bf48050-a8b8-4115-b13f-727d547c7eca" />
 
 
 
