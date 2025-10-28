@@ -24,7 +24,6 @@ This Shortcut is your single capture UI on **iPhone**, **iPad**, and **Mac**.
 - The Shortcut **appends exactly one JSON line** (newline-terminated) to your iCloud inbox — it **never overwrites** the file. 
 
 
-<img width="1201" height="991" alt="image" src="https://github.com/user-attachments/assets/2e64e5a6-87de-45a5-ad00-45ff3f986a6f" />
 
 <img src="https://github.com/user-attachments/assets/5bf48050-a8b8-4115-b13f-727d547c7eca" alt="image" width="600" height="976" />
 
@@ -37,7 +36,7 @@ This Shortcut is your single capture UI on **iPhone**, **iPad**, and **Mac**.
 * One entry per run (append mode with newline)
 * Stable, machine friendly format for downstream processing
 
-<img width="1098" height="927" alt="image" src="https://github.com/user-attachments/assets/5e6aff3c-0f2c-48fe-b1c9-b3a4544dea30" />
+<img width="1201" height="991" alt="image" src="https://github.com/user-attachments/assets/2e64e5a6-87de-45a5-ad00-45ff3f986a6f" />
 <img width="776" height="575" alt="image" src="https://github.com/user-attachments/assets/15bffdd5-0416-427a-bb2c-d5ac2c9ebc34" />
 
 ---
