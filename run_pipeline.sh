@@ -111,13 +111,20 @@ fi
 
 # ---- Run the main transformer (capture exit code, don't 'exec') ----
 set +e
+# --- Copy iCloud inbox to a local scratch file to avoid TCC/lock issues ---
+SCRATCH="$(mktemp -t quick_copy.XXXXXX.jsonl)"
+/bin/cp -f "$QUICK" "$SCRATCH" || {
+  echo "[warn] Could not copy $QUICK (maybe not created yet). Skipping."
+  exit 0
+}
 "$HOME/anki-tools/.venv/bin/python" -u "$HOME/anki-tools/transform_inbox_to_csv.py" \
-  --deck "Portuguese Mastery (pt-PT)" --model "GPT Vocabulary Automater"
+  --deck "Portuguese Mastery (pt-PT)" --model "GPT Vocabulary Automater" \
+  --inbox-file "$SCRATCH"
 STATUS=$?
 set -e
-
-# ---- Daily clear on first successful run (atomic, iCloud-safe) ----
-if [[ $STATUS -eq 0 && ! -f "$ROTATE_STAMP" ]]; then
+# ---- Daily clear (optional; disabled by default for LaunchAgent) ----
+# To enable, grant Full Disk Access to bash/python and export ROTATE_INBOX=1
+if [[ "${ROTATE_INBOX:-0}" == "1" && $STATUS -eq 0 && ! -f "$ROTATE_STAMP" ]]; then
   echo "[rotate] status=$STATUS stamp=$ROTATE_STAMP quick=$QUICK"
   mv -f "$QUICK" "$QUICK.$(date +%H%M%S).bak" 2>/dev/null || true
   : > "$QUICK"
