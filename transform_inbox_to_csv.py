@@ -23,6 +23,8 @@ import json
 import os
 import re
 import sys
+import errno
+import time
 import urllib.request
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -111,7 +113,18 @@ def _extract_json_sanitized(raw: str) -> Dict[str, str]:
 def _clean_spaces(s: str) -> str:
     return re.sub(r"\s+", " ", str(s)).strip()
 
-
+# Robust open with retry to handle iCloud Drive transient locks
+def _open_with_retry(path: Path, tries: int = 8, base: float = 0.25):
+    for i in range(tries):
+        try:
+            return path.open("r", encoding="utf-8", errors="replace")
+        except OSError as e:
+            if getattr(e, "errno", None) in (errno.EDEADLK, errno.EBUSY, errno.EAGAIN):
+                time.sleep(base * (2 ** i))
+                continue
+            raise
+    raise RuntimeError(f"Could not open {path}; it remained locked")
+    
 # ===== READ JSONL =====
 def read_quick_entries(path: Path) -> List[str]:
     """Accepts lines like:
@@ -119,7 +132,7 @@ def read_quick_entries(path: Path) -> List[str]:
     if not path.exists() or path.stat().st_size == 0:
         return []
     out: List[str] = []
-    with path.open("r", encoding="utf-8") as f:
+    with _open_with_retry(path) as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -467,6 +480,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--deck", default=DEFAULT_DECK)
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--inbox-file", default=None, help="Path to inbox file to read (override).")
     ap.add_argument(
         "--strict",
         action="store_true",
@@ -483,9 +497,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     INBOX_DIR.mkdir(parents=True, exist_ok=True)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-    raw_items = read_quick_entries(INBOX_FILE)
+    inbox_path = Path(args.inbox_file) if args.inbox_file else INBOX_FILE
+    raw_items = read_quick_entries(inbox_path)
     if not raw_items:
-        print(f"[INFO] No entries to process in {INBOX_FILE}")
+        print(f"[INFO] No entries to process in {inbox_path}")
         return 0
 
     # Normalize/lemma-ize
