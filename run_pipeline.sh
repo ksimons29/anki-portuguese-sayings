@@ -106,6 +106,10 @@ SCRATCH="$(mktemp -t quick_copy.XXXXXX.jsonl)"
 /bin/cp -f "$QUICK" "$SCRATCH" || echo "[warn] Could not copy $QUICK (maybe empty)."
 
 # ---- Run the transformer (pass the scratch file) ----
+# Copy iCloud inbox to scratch to avoid locks/TCC
+SCRATCH="$(mktemp -t quick_copy.XXXXXX.jsonl)"
+/bin/cp -f "$QUICK" "$SCRATCH" || echo "[warn] Could not copy $QUICK (maybe empty)."
+
 set +e
 "$HOME/anki-tools/.venv/bin/python" -u "$HOME/anki-tools/transform_inbox_to_csv.py" \
   --deck "Portuguese Mastery (pt-PT)" --model "GPT Vocabulary Automater" \
@@ -113,8 +117,7 @@ set +e
 STATUS=$?
 set -e
 
-# ---- Optional: rotate/clear iCloud inbox (disabled by default) ----
-# Enable by exporting ROTATE_INBOX=1 (and grant Full Disk Access to bash/python if needed).
+# ---- Optional: rotate iCloud inbox (disabled by default) ----
 if [[ "${ROTATE_INBOX:-0}" == "1" && $STATUS -eq 0 && ! -f "$ROTATE_STAMP" ]]; then
   echo "[rotate] status=$STATUS stamp=$ROTATE_STAMP quick=$QUICK"
   mv -f "$QUICK" "$QUICK.$(date +%H%M%S).bak" 2>/dev/null || true
@@ -122,3 +125,11 @@ if [[ "${ROTATE_INBOX:-0}" == "1" && $STATUS -eq 0 && ! -f "$ROTATE_STAMP" ]]; t
   touch "$ROTATE_STAMP"
   echo "[rotate] quick.jsonl cleared for $TODAY"
 fi
+
+# Single-run lock
+LOCK="$INBOX/.pipeline.lock"
+if ! mkdir "$LOCK" 2>/dev/null; then
+  echo "[lock] another run is active; exiting."
+  exit 0
+fi
+trap 'rmdir "$LOCK"' EXIT
