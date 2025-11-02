@@ -1,0 +1,4 @@
+[enc] stdout=utf-8 stderr=utf-8
+[norm] 'print this page' -> 'print this page' (rule: short-phrase)
+[norm] 'how do you say receipt' -> 'receipt' (rule: content-longest)
+[INFO] Will process 2 item(s).
