@@ -1,106 +1,119 @@
-#!/bin/bash
+#!/usr/bin/env bash
+unset ANKI_BASE
 set -euo pipefail
 
-echo "START $(date)"
-echo "whoami=$(whoami)"
-echo "pwd=$(pwd)"
-/usr/bin/caffeinate -i -w $$ &
-
-# ---- Logging ----
-LOGDIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs"
-mkdir -p "$LOGDIR"
-exec >>"$LOGDIR/pipeline.$(date +%F).log" 2>>"$LOGDIR/pipeline.$(date +%F).err"
-echo "START $(date)"
-echo "whoami=$(whoami)"
-echo "pwd=$(pwd)"
-
 # ---- Env ----
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 export PYTHONIOENCODING=UTF-8
+
+ICLOUD_ROOT="$HOME/Library/Mobile Documents/com~apple~CloudDocs"
+[ -d "$ICLOUD_ROOT" ] || { echo "[err] iCloud root not found: $ICLOUD_ROOT"; exit 1; }
+
+ANKI_DATA_DIR="$ICLOUD_ROOT/Portuguese/Anki"
+INBOX="$ANKI_DATA_DIR/inbox"
+QUICK="$INBOX/quick.jsonl"
+TODAY="$(date +%F)"
+ROTATE_STAMP="$INBOX/.rotated-$TODAY"
+LOGDIR="$ANKI_DATA_DIR/logs"
+
+mkdir -p "$INBOX" "$LOGDIR"
+
+# ---- Optional log redirection (default ON unless NO_REDIRECT=1) ----
+if [[ -z "${NO_REDIRECT:-}" ]]; then
+  exec >>"$LOGDIR/pipeline.$TODAY.log" 2>>"$LOGDIR/pipeline.$TODAY.err"
+fi
+
+# Start tracing after redirection so logs include the trace
+set -x
+
+# ---- Keep system awake during this run ----
+/usr/bin/caffeinate -i -w $$ &
 
 # ---- Network gate ----
 require_network() {
   local tries=6
-  while ! /sbin/ping -q -c1 -t1 1.1.1.1 >/dev/null 2>&1 ; do
-    tries=$((tries-1))
-    [ $tries -le 0 ] && { echo "[net] offline; skipping this run"; return 1; }
-    echo "[net] no connectivity; retrying..."
-    sleep 10
+  while ! /sbin/ping -q -c1 -t1 1.1.1.1 >/dev/null 2>&1; do
+    ((tries--)) || return 1
+    sleep 3
   done
-  return 0
 }
+require_network || { echo "[net] offline; aborting"; exit 0; }
 
-# ---- Paths ----
-ANKI_BASE="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki"
-INBOX="$ANKI_BASE/inbox"
-QUICK="$INBOX/quick.jsonl"
-TODAY="$(date +%F)"
-ROTATE_STAMP="$INBOX/.rotated-$TODAY"
-mkdir -p "$INBOX"
+# ---- Open Anki and wait for AnkiConnect ----
+open -gj -a "Anki" || true
 
-# Single-run lock (avoid overlap)
-LOCK="$INBOX/.pipeline.lock"
-if ! mkdir "$LOCK" 2>/dev/null; then
-  echo "[lock] another run is active; exiting."
-  exit 0
+wait_for_anki() {
+  local tries=30
+  while :; do
+    if curl -s http://127.0.0.1:8765 -X POST \
+         -d '{"action":"version","version":6}' | grep -q '"result"'; then
+      echo "[anki] AnkiConnect ready"
+      return 0
+    fi
+    ((tries--)) || break
+    sleep 1
+  done
+  return 1
+}
+wait_for_anki || { echo "[anki] AnkiConnect not ready after 30s"; exit 0; }
+
+# ---- Secrets from Keychain (mask xtrace while reading) ----
+XTRACE_WAS_ON="${-//[^x]/}"
+set +x
+# Try service names in order: customize to your setup
+OPENAI_API_KEY="${OPENAI_API_KEY:-}"
+if [[ -z "$OPENAI_API_KEY" ]]; then
+  for SVC in "anki-tools-openai" "OPENAI_API_KEY" "openai_api_key"; do
+    if KEY_FROM_KC="$(/usr/bin/security find-generic-password -a "$USER" -s "$SVC" -w 2>/dev/null)"; then
+      OPENAI_API_KEY="$KEY_FROM_KC"
+      break
+    fi
+  done
 fi
-trap 'rmdir "$LOCK"' EXIT
-
-# cleanup old rotation stamps
-for f in "$INBOX"/.rotated-*; do
-  [ -e "$f" ] || continue
-  [ "$(basename "$f")" = ".rotated-$TODAY" ] && continue
-  rm -f "$f"
-done
-
-# ---- OpenAI key from Keychain + sanitize ----
-if [[ -z "${OPENAI_API_KEY:-}" ]]; then
-  if KEY_FROM_KC="$(security find-generic-password -a "$USER" -s "anki-tools-openai" -w 2>/dev/null)"; then
-    OPENAI_API_KEY="$KEY_FROM_KC"
-  else
-    echo "[err] OPENAI_API_KEY not set and Keychain item 'anki-tools-openai' not found." >&2
-    exit 1
-  fi
+if [[ -z "$OPENAI_API_KEY" ]]; then
+  echo "[err] OPENAI_API_KEY not set and not found in Keychain." >&2
+  exit 1
 fi
+# sanitize curly quotes and newlines
 OPENAI_API_KEY="$(printf %s "$OPENAI_API_KEY" | LC_ALL=C tr -d '\r\n' | tr -d '“”‘’')"
 export OPENAI_API_KEY
+# If you use Azure, set OPENAI_BASE_URL, OPENAI_API_VERSION, and LLM_MODEL via Keychain or env and DO NOT unset them.
+# For public OpenAI we keep these unset:
 unset OPENAI_BASE_URL OPENAI_API_BASE OPENAI_ORG_ID
+
+# re-enable xtrace if it was on
+[[ -n "$XTRACE_WAS_ON" ]] && set -x
 echo "key_prefix=${OPENAI_API_KEY:0:6}"
 
-# ---- Bring up AnkiConnect ----
-open -gj -a "Anki" || true
-require_network || exit 0
-for i in {1..20}; do
-  if curl -sS --max-time 1 localhost:8765 >/dev/null ; then
-    echo "[anki] AnkiConnect reachable."
-    break
-  fi
-  sleep 1
-done
-if ! curl -sS --max-time 1 localhost:8765 >/dev/null ; then
-  echo "[anki] AnkiConnect not reachable; skipping this run"
+# ---- Prepare scratch copy of the inbox ----
+SCRATCH="$(mktemp -t quick_copy.XXXXXX.jsonl)"
+if ! /bin/cp -f "$QUICK" "$SCRATCH" 2>/dev/null; then
+  echo "[inbox] WARN: $QUICK not found; creating empty scratch"
+  : > "$SCRATCH"
+fi
+
+# Bail clearly when there's nothing to do
+if [ ! -s "$SCRATCH" ]; then
+  echo "[inbox] scratch is empty; nothing to process."
   exit 0
 fi
 
-# ---- Run the main transformer (capture exit code, don't 'exec') ----
-# Copy iCloud inbox to a local scratch (avoid iCloud locks/TCC)
-SCRATCH="$(mktemp -t quick_copy.XXXXXX.jsonl)"
-/bin/cp -f "$QUICK" "$SCRATCH" || echo "[warn] Could not copy $QUICK (maybe empty)."
+# ---- Run transformer ----
+PY="$HOME/anki-tools/.venv/bin/python"
+[ -x "$PY" ] || PY="$(command -v python3)"
 
-set +e
-"$HOME/anki-tools/.venv/bin/python" -u "$HOME/anki-tools/transform_inbox_to_csv.py" \
-  --deck "Portuguese Mastery (pt-PT)" --model "GPT Vocabulary Automater" \
-  --inbox-file "$SCRATCH"
-STATUS=$?
-set -e
+# Allow deck/model overrides via env
+: "${ANKI_DECK:=Portuguese Mastery (pt-PT)}"
+: "${ANKI_MODEL:=GPT Vocabulary Automater}"
 
-# ---- Optional: rotate iCloud inbox (default OFF; needs Full Disk Access) ----
-if [[ "${ROTATE_INBOX:-0}" == "1" && $STATUS -eq 0 && ! -f "$ROTATE_STAMP" ]]; then
-  echo "[rotate] status=$STATUS stamp=$ROTATE_STAMP quick=$QUICK"
-  mv -f "$QUICK" "$QUICK.$(date +%H%M%S).bak" 2>/dev/null || true
-  : > "$QUICK"
-  touch "$ROTATE_STAMP"
-  echo "[rotate] quick.jsonl cleared for $TODAY"
-fi
+"$PY" -u "$HOME/anki-tools/transform_inbox_to_csv.py" \
+  --deck "$ANKI_DECK" \
+  --model "$ANKI_MODEL" \
+  --inbox-file "$SCRATCH" \
+  --limit 1
 
-exit "$STATUS"
+# ---- Sync Anki (optional but nice) ----
+curl -s http://127.0.0.1:8765 -X POST \
+     -d '{"action":"sync","version":6}' >/dev/null 2>&1 || true
+
+echo "[done] $TODAY"

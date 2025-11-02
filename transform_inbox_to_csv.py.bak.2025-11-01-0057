@@ -36,8 +36,6 @@ from _openai_compat import chat as _compat_chat
 # Force Mobile Documents path; honor ANKI_BASE env; fallback to CloudStorage
 from pathlib import Path
 import os
-LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-4o-mini")  # default for logging/mock
-ANKI_URL = os.environ.get("ANKI_URL", "http://127.0.0.1:8765")
 
 def get_anki_base() -> Path:
     # 1) Honor env from run_pipeline.sh

@@ -1,26 +1,40 @@
+cat > ~/Library/LaunchAgents/com.anki.sync.quickjsonl.plist <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN"
+ "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key>
-  <string>com.anki.sync.quickjsonl</string>
+  <key>Label</key><string>com.anki.sync.quickjsonl</string>
 
-  <!-- Use absolute paths; run via login (Aqua) session so Anki can launch -->
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
     <string>-lc</string>
-    <string>/Users/koossimons/anki-tools/run_pipeline.sh</string>
+    <!-- Launch Anki with the default base, then run the pipeline -->
+    <string>env -u ANKI_BASE -u ANKIDIR "/Applications/Anki.app/Contents/MacOS/anki" -b "$HOME/Library/Application Support/Anki2" &amp; sleep 8; /Users/koossimons/anki-tools/run_pipeline.sh</string>
   </array>
 
+  <key>WorkingDirectory</key>
+  <string>/Users/koossimons/anki-tools</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>ROTATE_INBOX</key><string>0</string>
+    <key>PYTHONIOENCODING</key><string>UTF-8</string>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/Users/koossimons/Library/Logs/anki-tools.launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/koossimons/Library/Logs/anki-tools.launchd.err.log</string>
+
+  <!-- Open at login -->
+  <key>RunAtLoad</key><true/>
+
+  <!-- Only in the GUI session -->
   <key>LimitLoadToSessionType</key>
-  <string>Aqua</string>
+  <array><string>Aqua</string></array>
 
-  <!-- Run once at login -->
-  <key>RunAtLoad</key>
-  <true/>
-
-  <!-- Run every 4 hours: 09:00, 13:00, 17:00, 21:00 -->
   <key>StartCalendarInterval</key>
   <array>
     <dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
@@ -28,26 +42,17 @@
     <dict><key>Hour</key><integer>17</integer><key>Minute</key><integer>0</integer></dict>
     <dict><key>Hour</key><integer>21</integer><key>Minute</key><integer>0</integer></dict>
   </array>
-
-  <!-- Env for the script. Do NOT store the API key here; script pulls Keychain. -->
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>PATH</key>
-    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
-    <key>LLM_MODEL</key>
-    <string>gpt-4o-mini</string>
-    <key>ANKI_URL</key>
-    <string>http://127.0.0.1:8765</string>
-    <key>ANKI_BASE</key>
-    <string>/Users/koossimons/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki</string>
-    <key>ROTATE_INBOX</key>
-    <string>0</string>
-  </dict>
-
-  <!-- Optional: the script itself redirects to iCloud logs after start -->
-  <key>StandardOutPath</key>
-  <string>/tmp/anki_vocab_sync.log</string>
-  <key>StandardErrorPath</key>
-  <string>/tmp/anki_vocab_sync.err</string>
 </dict>
 </plist>
+PLIST
+
+plutil -lint ~/Library/LaunchAgents/com.anki.sync.quickjsonl.plist
+launchctl unload ~/Library/LaunchAgents/com.anki.sync.quickjsonl.plist 2>/dev/null || true
+launchctl load  -w ~/Library/LaunchAgents/com.anki.sync.quickjsonl.plist
+
+# simulate the login run now
+launchctl kickstart -k "gui/$(id -u)/com.anki.sync.quickjsonl"
+
+# verify Anki is using the default base (should show paths under Anki2, not Portuguese/Anki)
+sleep 6
+lsof -p $(pgrep -n anki) | egrep 'Library/Application Support/Anki2/.+/(collection|prefs)|Mobile Documents/.+/Portuguese/Anki' || true

@@ -1,15 +1,16 @@
+# Backup the broken file (keeps a copy for reference)
+cp ~/anki-tools/_openai_compat.py ~/anki-tools/_openai_compat.py.broken.$(date +%F-%H%M)
 
+# Overwrite with a safe shim (auto-uses /v1/responses for sk-proj-* keys)
+cat > ~/anki-tools/_openai_compat.py <<"PY"
 from __future__ import annotations
 import json, os, urllib.request
 
 def _sanitize_key(k: str) -> str:
-    if not k:
-        return ""
+    if not k: return ""
     k = k.strip().replace("\n","").replace("\r","").replace("“","").replace("”","").replace("‘","").replace("’","")
-    try:
-        k.encode("ascii")
-    except UnicodeEncodeError:
-        k = k.encode("ascii","ignore").decode("ascii")
+    try: k.encode("ascii")
+    except UnicodeEncodeError: k = k.encode("ascii","ignore").decode("ascii")
     return k
 
 def chat(model: str, messages, temperature=0.2, top_p=0.95, max_tokens=300):
@@ -35,7 +36,7 @@ def chat(model: str, messages, temperature=0.2, top_p=0.95, max_tokens=300):
 
     if use_responses:
         url = f"{base}/responses"
-        # Flatten chat messages to a single prompt string
+        # flatten chat messages to a single prompt string
         prompt = "\n\n".join(f"{m.get('role','user').upper()}: {m.get('content','')}" for m in messages)
         payload = {
             "model": model,
@@ -67,8 +68,8 @@ def chat(model: str, messages, temperature=0.2, top_p=0.95, max_tokens=300):
     with urllib.request.urlopen(req, timeout=60) as r:
         js = json.loads(r.read().decode("utf-8","strict"))
 
-    # Normalize shape to look like Chat Completions for the caller
-    if isinstance(js, dict) and "choices" in js and js["choices"] and "message" in js["choices"][0]:
+    # Normalize to Chat Completions-like shape for the caller
+    if "choices" in js and js["choices"] and "message" in js["choices"][0]:
         content = js["choices"][0]["message"]["content"]
         usage = js.get("usage",{}); meta={"id":js.get("id")}
     else:
@@ -83,3 +84,4 @@ def chat(model: str, messages, temperature=0.2, top_p=0.95, max_tokens=300):
             content = "\n".join(parts).strip()
         usage = js.get("usage",{}); meta={"id":js.get("id")}
     return {"choices":[{"message":{"content":content}}],"usage":usage,"meta":meta}
+PY
