@@ -190,6 +190,12 @@ Manual kickstart: `bash ~/anki-tools/run_pipeline.sh`
    - Pushes the new notes into Anki via **AnkiConnect** (localhost:8765).
 4. **Review**: You study cards in Anki with spaced repetition.
 
+### Automation notes
+- `run_pipeline.sh` auto-opens Anki via `open -a Anki`, waits for AnkiConnect, and on production runs refreshes the collection UI then triggers an Anki sync so the new notes are visible immediately.
+- By default the script performs a full production import; add `--dry-run` when you want to rehearse without touching CSVs or Anki.
+- Flags like `--limit`, `--deck`, `--model`, `--log-level`, and `--inbox` let you trim batches, redirect output, or test against a scratch inbox.
+- The OpenAI key is loaded at runtime from the Keychain item `anki-tools-openai`; nothing is stored in env files or the repo.
+
 ---
 
 ## 🧾 Anki Card Data Contract (Note Model & Field Order)
