@@ -224,8 +224,13 @@ If your note type uses different field names or order, update the model to match
 - Length: keep `word_*` fields short; `sentence_pt` targets C1 length and style.  
 - Duplicates: the pipeline de-duplicates against `sayings.csv` and within a batch.  
 - In Anki, set the model’s duplicate check to the first field (`word_en`) and scope to “Deck” (recommended).  
-- No media fields: images are handled statically in your Anki template (pipeline does not fetch images).  
+- No media fields: images are handled statically in your Anki template (pipeline does not fetch images).
 - Audio: generated at review time with Anki TTS using `sentence_pt` (see template snippet below).
+
+### 🎨 Card styling
+- The default styling lives in `decks/card_style.css`. Replace your card template CSS with this file to get the latest typography, including boosted sentence sizes and brighter colors for both Portuguese and English example sentences.
+- `.sent.pt` is now 24 px with a heavier weight for readability, while `.sent.en` is 22 px with a brighter foreground mix so both sentences pop against light or dark backgrounds.
+- Phone breakpoints (`@media (max-width: 480px)`) keep proportional sizing—22 px for Portuguese and 20 px for English—so the cards stay comfortable on mobile.
 
 ---
 
