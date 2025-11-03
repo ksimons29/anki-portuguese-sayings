@@ -283,6 +283,15 @@ pip install --upgrade pip
 # pip install -r requirements.txt    # if your repo has one
 ```
 
+## 🧪 Tests
+- `tests/test_transform_inbox.py` exercises the full ingestion pipeline: path resolution, JSONL parsing, lemma extraction, CSV header management, retry handling for iCloud locks, Anki auto-launch retry, UI refresh, and dry-run vs production flows.
+- The suite is designed for pytest (`pip install -r requirements.txt` already includes `pytest`). Run locally with:
+  ```bash
+  source .venv/bin/activate
+  pytest -q
+  ```
+  These tests use the `MOCK_LLM` path to avoid network traffic and monkeypatch AnkiConnect calls, so they are safe to run offline.
+
 ### 2) OpenAI key in Keychain
 ```bash
 # Store/Update the key in macOS Keychain
