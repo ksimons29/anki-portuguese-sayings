@@ -263,7 +263,8 @@ If your note type uses different field names or order, update the model to match
 | `~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs/pipeline.YYYY-MM-DD.err` | Error/stderr log for each pipeline run (rotated daily). | ✅ Yes |
 | `Keychain item: anki-tools-openai` | Securely stores your classic OpenAI API key (`sk-…`) for access by the pipeline. | ✅ Yes |
 | `~/anki-tools/.venv/` | Python virtual environment containing dependencies (`openai`, `requests`, etc.). | ✅ Yes |
-| `~/anki-tools/archive/` | Folder for deprecated helpers (`check_openai_key.py`, `import_all.sh`, `check_anki_adds_today.py`, etc.); preserved for reference only. | 🚫 Not used |
+| `~/anki-tools/archive/` | Folder for deprecated helpers (`anki_from_csv_dual_audio.py`, `check_openai_key.py`, `import_all.sh`, `sanitize_quick_jsonl.py`, etc.). | 🚫 Not used |
+| `~/anki-tools/archive/backups/` | Historical `.bak` snapshots (e.g., prior `run_pipeline.sh`, `transform_inbox_to_csv.py`, `_openai_compat.py` variants). | 🚫 Not used |
 
 ---
 ### 🔊 Why TTS?
