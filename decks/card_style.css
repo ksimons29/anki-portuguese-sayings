@@ -46,16 +46,6 @@
 }
 .tts { margin: 6px 0 2px; }
 
-/* ---------- Image block ---------- */
-.image-wrap { margin: 0 auto 12px; }
-.image-wrap img {
-  width: auto; height: auto;
-  max-width: min(92%, 560px);
-  display: block; margin: 0 auto;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-}
-
 /* ---------- Divider & credit ---------- */
 #answer {
   border: 0; height: 1px; margin: 14px 0 12px;
@@ -81,7 +71,6 @@
   .term-pt, .term-en { font-size: 26px; }
   .sent.pt { font-size: 22px; }
   .sent.en { font-size: 20px; }
-  .image-wrap img { max-width: 96%; }
   :root { --brand-size: 48px; } /* smaller logo on phones */
 }
 
