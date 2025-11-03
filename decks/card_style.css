@@ -1,251 +1,92 @@
-/* ---------- Deck theme (dark-first) ---------- */
+/* ---------- Theme & sizes ---------- */
 :root {
-  --bg-base: #030712;
-  --bg-gradient-top: rgba(56, 189, 248, 0.24);
-  --bg-elevated: rgba(11, 19, 35, 0.94);
-  --bg-glass: rgba(17, 27, 49, 0.78);
-  --text-primary: #f8fafc;
-  --text-secondary: rgba(248, 250, 252, 0.72);
-  --text-muted: #94a3b8;
-  --accent: #38bdf8;
-  --accent-strong: #0ea5e9;
-  --divider: rgba(148, 163, 184, 0.36);
-  --radius-lg: 22px;
-  --radius-md: 14px;
-  --shadow-strong: 0 32px 80px rgba(2, 6, 23, 0.7);
-  --shadow-soft: 0 14px 38px rgba(8, 18, 42, 0.45);
-  --brand-size: 62px;
-  --brand-gap: 18px;
+  --fg: #0f172a;
+  --bg: #ffffff;
+  --muted: #6b7280;
+  --radius: 14px;
+  --shadow: 0 10px 28px rgba(0,0,0,.08);
+  --brand-size: 56px;   /* logo size */
+  --brand-gap: 12px;    /* distance from bottom */
 }
-@media (prefers-color-scheme: light) {
+@media (prefers-color-scheme: dark) {
   :root {
-    --bg-base: #f1f4ff;
-    --bg-gradient-top: rgba(99, 102, 241, 0.14);
-    --bg-elevated: rgba(255, 255, 255, 0.94);
-    --bg-glass: rgba(255, 255, 255, 0.82);
-    --text-primary: #0f172a;
-    --text-secondary: rgba(15, 23, 42, 0.74);
-    --text-muted: #6b7280;
-    --accent: #2563eb;
-    --accent-strong: #1d4ed8;
-    --divider: rgba(148, 163, 184, 0.22);
-    --shadow-strong: 0 28px 70px rgba(15, 23, 42, 0.18);
-    --shadow-soft: 0 12px 28px rgba(15, 23, 42, 0.22);
+    --fg: #e5e7eb;
+    --bg: #0b0f16;
+    --muted: #9ca3af;
+    --shadow: 0 12px 32px rgba(0,0,0,.35);
   }
 }
 
-/* ---------- Canvas / backdrop ---------- */
-html,
-body,
-#qa {
-  min-height: 100%;
-  margin: 0;
-  color: var(--text-primary);
-  background-color: var(--bg-base) !important;
-  background-image: radial-gradient(120% 160% at 50% -12%, var(--bg-gradient-top), transparent 58%),
-    linear-gradient(180deg, rgba(3, 7, 18, 0.98), rgba(3, 7, 18, 0.92));
-  background-repeat: no-repeat;
-  background-size: cover;
-  background-attachment: fixed;
-}
-
-#qa {
-  display: flex;
-  justify-content: center;
-  align-items: stretch;
-  padding: clamp(20px, 6vw, 48px);
-  box-sizing: border-box;
-}
-
-body {
-  font-family: "Inter", "Atkinson Hyperlegible", "Source Sans 3", "Noto Sans",
-    -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Helvetica,
-    Arial, "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
-}
-
-/* ---------- Card shell ---------- */
-.card {
-  position: relative;
-  width: min(720px, 100%);
-  margin: auto;
-  padding: clamp(28px, 6vw, 50px) clamp(28px, 7vw, 56px)
-    calc(var(--brand-size) + var(--brand-gap) + clamp(16px, 3vw, 28px));
-  display: grid;
-  gap: clamp(18px, 3vw, 30px);
+/* ---------- Card base ---------- */
+.card{
+  color: var(--fg);
+  background: var(--bg);
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+               Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  font-size: 22px;
+  line-height: 1.6;
   text-align: center;
-  color: var(--text-primary);
-  background: var(--bg-elevated);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-strong);
-  line-height: 1.7;
+  padding: 18px 18px calc(var(--brand-size) + var(--brand-gap) + 12px); /* room for footer logo */
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  position: relative; /* anchor for .brand */
 }
 
-@supports (backdrop-filter: blur(22px)) {
-  .card {
-    background: var(--bg-glass);
-    backdrop-filter: blur(22px) saturate(120%);
-  }
-}
+/* ---------- Head terms ---------- */
+.term { font-size: 38px; font-weight: 750; letter-spacing: .2px; margin: 8px 0 0; }
+.term-pt, .term-en { font-size: 30px; font-weight: 700; margin: 6px 0 2px; }
 
-.card::before {
-  content: "";
-  position: absolute;
-  inset: 1px;
-  border-radius: inherit;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  pointer-events: none;
-}
-
-/* ---------- Header terms ---------- */
-.term {
-  margin: 0 auto;
-  padding: clamp(12px, 2.8vw, 22px) clamp(22px, 4.6vw, 32px);
-  font-size: clamp(34px, 4.8vw, 48px);
-  font-weight: 780;
-  letter-spacing: 0.28px;
-  border-radius: var(--radius-md);
-  background: linear-gradient(140deg, rgba(56, 189, 248, 0.22), rgba(14, 165, 233, 0.12));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  text-wrap: balance;
-}
-
-.term-pt,
-.term-en {
-  margin: 0;
-  font-size: clamp(26px, 3.4vw, 34px);
-  font-weight: 680;
-  color: var(--text-primary);
-  text-wrap: balance;
-}
-
-.term-en {
-  color: var(--text-secondary);
-}
-
-/* ---------- Sentences & audio ---------- */
-.sent {
-  margin: 0;
-  line-height: 1.74;
-  text-wrap: pretty;
-  hyphens: auto;
-}
-
-.sent.pt {
-  font-size: clamp(23px, 3vw, 28px);
-  font-weight: 660;
-  color: var(--text-primary);
-}
-
+/* ---------- Sentences & TTS ---------- */
+.sent { margin-top: 10px; line-height: 1.65; }
+.sent.pt { font-size: 24px; font-weight: 650; color: var(--fg); }
 .sent.en {
-  font-size: clamp(21px, 2.6vw, 24px);
-  font-weight: 560;
-  color: var(--text-secondary);
+  font-size: 22px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--fg) 90%, white 10%);
 }
+.tts { margin: 6px 0 2px; }
 
-.tts {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  margin-top: -6px;
-  font-size: 0.9em;
-  letter-spacing: 0.02em;
-  color: var(--text-muted);
-}
-
-/* ---------- Imagery ---------- */
-.image-wrap {
-  margin: 0 auto;
-  width: min(92%, 560px);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  box-shadow: var(--shadow-soft);
-  background: linear-gradient(180deg, rgba(56, 189, 248, 0.16), transparent 70%);
-}
-
+/* ---------- Image block ---------- */
+.image-wrap { margin: 0 auto 12px; }
 .image-wrap img {
-  display: block;
-  width: 100%;
-  height: auto;
+  width: auto; height: auto;
+  max-width: min(92%, 560px);
+  display: block; margin: 0 auto;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
 }
 
 /* ---------- Divider & credit ---------- */
 #answer {
-  border: 0;
-  height: 1px;
-  margin: 0;
-  background: linear-gradient(90deg, transparent, var(--divider), transparent);
+  border: 0; height: 1px; margin: 14px 0 12px;
+  background: linear-gradient(90deg, transparent, rgba(0,0,0,.18), transparent);
 }
+.credit { font-size: 12px; color: var(--muted); text-align: center; margin-top: 12px; line-height: 1.35; }
 
-.credit {
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--text-muted);
-  line-height: 1.35;
-}
-
-/* ---------- Footer branding ---------- */
-.brand {
+/* ---------- Footer brand logo (bottom centered) ---------- */
+.brand{
   position: absolute;
   left: 50%;
   bottom: var(--brand-gap);
   transform: translateX(-50%);
-  opacity: 0.42;
-  pointer-events: none;
+  opacity: .35;
+  pointer-events: none; /* won’t block clicks/tts */
 }
-
-.brand img {
-  width: var(--brand-size);
-  height: var(--brand-size);
-  display: block;
-  filter: drop-shadow(0 8px 18px rgba(2, 6, 23, 0.38));
-}
+.brand img{ width: var(--brand-size); height: var(--brand-size); display: block; }
 
 /* ---------- Small screens ---------- */
-@media (max-width: 560px) {
-  :root {
-    --brand-size: 50px;
-    --brand-gap: 14px;
-  }
-
-  #qa {
-    padding: clamp(16px, 6vw, 28px);
-  }
-
-  .card {
-    padding: clamp(22px, 6vw, 32px) clamp(18px, 6vw, 28px)
-      calc(var(--brand-size) + var(--brand-gap) + clamp(12px, 4vw, 20px));
-    gap: clamp(16px, 6vw, 22px);
-  }
-
-  .term {
-    font-size: clamp(30px, 8vw, 36px);
-  }
-
-  .term-pt,
-  .term-en {
-    font-size: clamp(24px, 6vw, 28px);
-  }
-
-  .sent.pt {
-    font-size: clamp(22px, 6vw, 26px);
-  }
-
-  .sent.en {
-    font-size: clamp(20px, 5.5vw, 23px);
-  }
-
-  .image-wrap {
-    width: 100%;
-  }
+@media (max-width: 480px){
+  .card { font-size: 20px; }
+  .term { font-size: 34px; }
+  .term-pt, .term-en { font-size: 26px; }
+  .sent.pt { font-size: 22px; }
+  .sent.en { font-size: 20px; }
+  .image-wrap img { max-width: 96%; }
+  :root { --brand-size: 48px; } /* smaller logo on phones */
 }
 
-/* ---------- Text wrapping helpers ---------- */
-.sent,
-.term,
-.term-pt,
-.term-en {
+/* ---------- Better wrapping & hyphenation ---------- */
+.sent, .term, .term-pt, .term-en {
   text-wrap: pretty;
+  -webkit-hyphens: auto; -ms-hyphens: auto; hyphens: auto;
 }
