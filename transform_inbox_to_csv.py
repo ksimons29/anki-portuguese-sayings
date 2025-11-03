@@ -18,14 +18,16 @@ from __future__ import annotations
 import argparse
 import csv
 import datetime as dt
+import errno
 import io
 import json
 import os
 import re
+import subprocess
 import sys
-import errno
 import time
 import urllib.request
+from urllib.error import URLError
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -120,6 +122,38 @@ def _safe_printerr(msg: str):
             print(msg.encode("ascii", "ignore").decode("ascii"), file=sys.stderr)
 
 
+_LOG_LEVEL_RANK = {"DEBUG": 10, "INFO": 20, "WARN": 30, "ERROR": 40, "SILENT": 50}
+_CURRENT_LOG_LEVEL = _LOG_LEVEL_RANK["INFO"]
+
+
+def _set_log_level(level: str) -> None:
+    global _CURRENT_LOG_LEVEL
+    level = (level or "INFO").upper()
+    _CURRENT_LOG_LEVEL = _LOG_LEVEL_RANK.get(level, _LOG_LEVEL_RANK["INFO"])
+
+
+def _log(level: str, msg: str) -> None:
+    lvl = _LOG_LEVEL_RANK.get((level or "INFO").upper(), _LOG_LEVEL_RANK["INFO"])
+    if lvl < _CURRENT_LOG_LEVEL:
+        return
+    print(msg)
+
+
+def _coerce_bool(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return True
+    if isinstance(value, (int, float)):
+        return value != 0
+    s = str(value).strip().lower()
+    if s in {"1", "true", "t", "yes", "y", "on"}:
+        return True
+    if s in {"0", "false", "f", "no", "n", "off", ""}:
+        return False
+    raise ValueError(f"Invalid boolean value: {value!r}")
+
+
 # --- JSON helpers ---
 FENCE_RE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$")
 
@@ -167,24 +201,32 @@ def read_quick_entries(path: Path) -> List[str]:
                 obj = json.loads(line)
             except json.JSONDecodeError:
                 continue
+            payload = None
             if "entries" in obj:
-                e = obj["entries"]
-                if isinstance(e, str):
-                    out.extend(
-                        [p.strip() for p in re.split(r"[,\n;]+", e) if p.strip()]
-                    )
-                elif isinstance(e, list):
-                    for item in e:
-                        if isinstance(item, str):
-                            out.extend(
-                                [
-                                    p.strip()
-                                    for p in re.split(r"[,\n;]+", item)
-                                    if p.strip()
-                                ]
-                            )
+                payload = obj["entries"]
             elif isinstance(obj.get("word"), str):
-                out.append(obj["word"])
+                payload = obj["word"]
+            else:
+                for key in ("text", "entry", "term", "phrase"):
+                    candidate = obj.get(key)
+                    if isinstance(candidate, (str, list)):
+                        payload = candidate
+                        break
+
+            if payload is None:
+                continue
+
+            if isinstance(payload, str):
+                values = [payload]
+            elif isinstance(payload, list):
+                values = [item for item in payload if isinstance(item, str)]
+            else:
+                continue
+
+            for item in values:
+                out.extend(
+                    [p.strip() for p in re.split(r"[,\n;]+", item) if p.strip()]
+                )
     return out
 
 
@@ -366,13 +408,65 @@ def append_rows(csv_path: Path, rows: List[List[str]]) -> None:
 
 
 # ===== ANKICONNECT =====
+_anki_launch_attempted = False
+_last_launch_ts: Optional[float] = None
+
+
+def _should_retry_connection(err: URLError) -> bool:
+    """
+    Return True if the URLError looks like a connection refused situation.
+    """
+    reason = getattr(err, "reason", err)
+    if isinstance(reason, ConnectionRefusedError):
+        return True
+    err_no = getattr(reason, "errno", None)
+    if err_no in (errno.ECONNREFUSED, 61):  # macOS uses 61
+        return True
+    return False
+
+
+def _launch_anki() -> bool:
+    """
+    Attempt to launch Anki once. Returns True if launch was attempted.
+    """
+    global _anki_launch_attempted, _last_launch_ts
+    if _anki_launch_attempted:
+        return False
+    cmd = os.environ.get("ANKI_LAUNCH_CMD")
+    if cmd:
+        parts = cmd.strip().split()
+    else:
+        app = os.environ.get("ANKI_APP", "Anki")
+        parts = ["open", "-g", "-a", app]
+    try:
+        subprocess.Popen(parts)
+        _anki_launch_attempted = True
+        _last_launch_ts = time.time()
+        _log("INFO", "[INFO] Autostarting Anki after connection refusal.")
+        return True
+    except Exception as exc:
+        _safe_printerr(f"[WARN] Failed to auto-launch Anki: {exc}")
+        _anki_launch_attempted = True  # avoid repeated attempts
+        return False
+
+
 def anki_invoke(payload: dict) -> dict:
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
         ANKI_URL, data, headers={"Content-Type": "application/json"}
     )
-    with urllib.request.urlopen(req, timeout=20) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    attempts = 0
+    while True:
+        attempts += 1
+        try:
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except URLError as exc:
+            if attempts == 1 and _should_retry_connection(exc) and _launch_anki():
+                # give AnkiConnect a moment to come up, retry once
+                time.sleep(3)
+                continue
+            raise
 
 
 def add_notes_to_anki(
@@ -414,7 +508,7 @@ def add_notes_to_anki(
     flags = can.get("result", [])
     addable = [n for n, ok in zip(notes, flags) if ok]
     if not addable:
-        print("[INFO] All candidate notes already exist in Anki (nothing to add).")
+        _log("INFO", "[INFO] All candidate notes already exist in Anki (nothing to add).")
         return 0, []
     res = anki_invoke(
         {"action": "addNotes", "version": 6, "params": {"notes": addable}}
@@ -424,6 +518,13 @@ def add_notes_to_anki(
     gids = res.get("result", [])
     added = sum(1 for nid in gids if isinstance(nid, int))
     return added, gids
+
+
+def refresh_anki_ui() -> None:
+    """
+    Ask AnkiConnect to refresh the collection UI so new notes are visible.
+    """
+    anki_invoke({"action": "gui.refreshAll", "version": 6})
 
 
 # ===== LLM CALL =====
@@ -512,21 +613,60 @@ def main(argv: Optional[List[str]] = None) -> int:
         action="store_true",
         help="If set, skip any entry with >3 tokens or ending in sentence punctuation.",
     )
+    ap.add_argument(
+        "--out",
+        default=None,
+        help="Override output CSV path (defaults to iCloud sayings.csv).",
+    )
+    ap.add_argument(
+        "--dry-run",
+        nargs="?",
+        const="1",
+        default="0",
+        help="Process entries but skip CSV writes and Anki addNotes (accepts 0/1/true/false).",
+    )
+    ap.add_argument(
+        "--log-level",
+        default="INFO",
+        type=str.upper,
+        choices=list(_LOG_LEVEL_RANK.keys()),
+        help="Logging verbosity for stdout (default: INFO).",
+    )
     args = ap.parse_args(argv)
 
-    print(
+    try:
+        args.dry_run = _coerce_bool(args.dry_run)
+    except ValueError as exc:
+        ap.error(str(exc))
+
+    _set_log_level(args.log_level)
+
+    master_csv = Path(args.out).expanduser() if args.out else MASTER_CSV
+    last_import = (
+        master_csv.with_name("last_import.csv") if args.out else LAST_IMPORT
+    )
+    if args.out and not args.dry_run:
+        master_csv.parent.mkdir(parents=True, exist_ok=True)
+
+    _log(
+        "INFO",
         f"[enc] stdout={getattr(sys.stdout, 'encoding', None)} "
-        f"stderr={getattr(sys.stderr, 'encoding', None)}"
+        f"stderr={getattr(sys.stderr, 'encoding', None)}",
     )
 
-    BASE.mkdir(parents=True, exist_ok=True)
-    INBOX_DIR.mkdir(parents=True, exist_ok=True)
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    for path in (BASE, INBOX_DIR, LOG_DIR):
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+        except PermissionError as exc:
+            if args.dry_run:
+                _safe_printerr(f"[WARN] Could not ensure directory {path}: {exc}")
+                continue
+            raise
 
     inbox_path = Path(args.inbox_file) if args.inbox_file else INBOX_FILE
     raw_items = read_quick_entries(inbox_path)
     if not raw_items:
-        print(f"[INFO] No entries to process in {inbox_path}")
+        _log("INFO", f"[INFO] No entries to process in {inbox_path}")
         return 0
 
     # Normalize/lemma-ize
@@ -535,22 +675,22 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.strict:
             toks = _tokens(raw)
             if len(toks) > 3 or re.search(r"[.!?]$", raw.strip()):
-                print(f"[norm-skip] strict: '{raw}'")
+                _log("INFO", f"[norm-skip] strict: '{raw}'")
                 continue
         res = extract_lemma(raw)
         if res is None:
-            print(f"[norm-skip] '{raw}' (no lemma)")
+            _log("INFO", f"[norm-skip] '{raw}' (no lemma)")
             continue
         lemma, rule = res
-        print(f"[norm] '{raw}' -> '{lemma}' (rule: {rule})")
+        _log("INFO", f"[norm] '{raw}' -> '{lemma}' (rule: {rule})")
         normalized.append((lemma, rule, raw))
 
     if not normalized:
-        print("[INFO] Nothing left after normalization.")
+        _log("INFO", "[INFO] Nothing left after normalization.")
         return 0
 
     # Dedupe against CSV + within this batch
-    existing = load_existing_words(MASTER_CSV)
+    existing = load_existing_words(master_csv)
     seen, todo = set(), []
     for lemma, rule, original in normalized:
         k = lemma.strip().lower()
@@ -561,10 +701,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     if args.limit > 0:
         todo = todo[: args.limit]
     if not todo:
-        print("[INFO] Nothing new after duplicate filtering.")
+        _log("INFO", "[INFO] Nothing new after duplicate filtering.")
         return 0
 
-    print(f"[INFO] Will process {len(todo)} item(s).")
+    _log("INFO", f"[INFO] Will process {len(todo)} item(s).")
     today = dt.datetime.now().strftime("%Y-%m-%d")
     new_rows: List[List[str]] = []
     failures: List[Tuple[str, str]] = []
@@ -596,9 +736,10 @@ def main(argv: Optional[List[str]] = None) -> int:
 
             rid = meta.get("request_id")
             mid = meta.get("id")
-            print(
+            _log(
+                "INFO",
                 f"[OK] {i}/{len(todo)}  {row[0]} -> {row[1]}  "
-                f"(tokens p/c/t={p}/{c}/{t}, id={mid}, rid={rid})"
+                f"(tokens p/c/t={p}/{c}/{t}, id={mid}, rid={rid})",
             )
         except Exception as e:
             _safe_printerr(f"ERROR: LLM failed on '{lemma}' (from '{original}'): {e}")
@@ -607,66 +748,77 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if not new_rows and failures:
         _safe_printerr("[ERROR] All items failed; nothing to write/add.")
-        with LAST_IMPORT.open("w", encoding="utf-8", newline="") as f:
-            wcsv = csv.writer(f)
-            wcsv.writerow(
-                ["word_en", "word_pt", "sentence_pt", "sentence_en", "date_added"]
-            )
+        if not args.dry_run:
+            with last_import.open("w", encoding="utf-8", newline="") as f:
+                wcsv = csv.writer(f)
+                wcsv.writerow(
+                    ["word_en", "word_pt", "sentence_pt", "sentence_en", "date_added"]
+                )
         return 1
 
     # print and log usage summary for this run
-    print(
-        f"[USAGE] calls={calls} prompt={prompt_sum} completion={completion_sum} total={total_sum}"
+    _log(
+        "INFO",
+        f"[USAGE] calls={calls} prompt={prompt_sum} completion={completion_sum} total={total_sum}",
     )
-    ulog = LOG_DIR / f"tokens_{dt.datetime.now():%Y-%m}.csv"
-    try:
-        new_file = not ulog.exists()
-        with ulog.open("a", encoding="utf-8", newline="") as f:
-            w = csv.writer(f)
-            if new_file:
+    if not args.dry_run:
+        ulog = LOG_DIR / f"tokens_{dt.datetime.now():%Y-%m}.csv"
+        try:
+            new_file = not ulog.exists()
+            with ulog.open("a", encoding="utf-8", newline="") as f:
+                w = csv.writer(f)
+                if new_file:
+                    w.writerow(
+                        [
+                            "timestamp",
+                            "model",
+                            "calls",
+                            "prompt_tokens",
+                            "completion_tokens",
+                            "total_tokens",
+                        ]
+                    )
                 w.writerow(
                     [
-                        "timestamp",
-                        "model",
-                        "calls",
-                        "prompt_tokens",
-                        "completion_tokens",
-                        "total_tokens",
+                        dt.datetime.now().isoformat(timespec="seconds"),
+                        LLM_MODEL,
+                        calls,
+                        prompt_sum,
+                        completion_sum,
+                        total_sum,
                     ]
                 )
-            w.writerow(
-                [
-                    dt.datetime.now().isoformat(timespec="seconds"),
-                    LLM_MODEL,
-                    calls,
-                    prompt_sum,
-                    completion_sum,
-                    total_sum,
-                ]
-            )
-    except Exception as e:
-        _safe_printerr(f"[WARN] Could not write usage log: {e}")
+        except Exception as e:
+            _safe_printerr(f"[WARN] Could not write usage log: {e}")
 
-    try:
-        append_rows(MASTER_CSV, new_rows)
-        with LAST_IMPORT.open("w", encoding="utf-8", newline="") as f:
-            w = csv.writer(f)
-            w.writerow(
-                ["word_en", "word_pt", "sentence_pt", "sentence_en", "date_added"]
-            )
-            w.writerows(new_rows)
-        print(f"[INFO] Appended {len(new_rows)} row(s) to {MASTER_CSV}")
-        print(f"[INFO] Snapshot written to {LAST_IMPORT}")
-    except Exception as e:
-        _safe_printerr(f"ERROR: Writing CSV failed: {e}")
-        return 1
+        try:
+            append_rows(master_csv, new_rows)
+            with last_import.open("w", encoding="utf-8", newline="") as f:
+                w = csv.writer(f)
+                w.writerow(
+                    ["word_en", "word_pt", "sentence_pt", "sentence_en", "date_added"]
+                )
+                w.writerows(new_rows)
+            _log("INFO", f"[INFO] Appended {len(new_rows)} row(s) to {master_csv}")
+            _log("INFO", f"[INFO] Snapshot written to {last_import}")
+        except Exception as e:
+            _safe_printerr(f"ERROR: Writing CSV failed: {e}")
+            return 1
 
-    try:
-        added, _ = add_notes_to_anki(args.deck, args.model, new_rows)
-        print(f"[INFO] Anki addNotes added {added}/{len(new_rows)}")
-    except Exception as e:
-        _safe_printerr(f"ERROR: Anki addNotes failed: {e}")
-        return 1
+        try:
+            added, _ = add_notes_to_anki(args.deck, args.model, new_rows)
+            _log("INFO", f"[INFO] Anki addNotes added {added}/{len(new_rows)}")
+            if added > 0:
+                try:
+                    refresh_anki_ui()
+                    _log("INFO", "[INFO] Requested Anki UI refresh.")
+                except Exception as exc:
+                    _safe_printerr(f"[WARN] Could not refresh Anki UI: {exc}")
+        except Exception as e:
+            _safe_printerr(f"ERROR: Anki addNotes failed: {e}")
+            return 1
+    else:
+        _log("INFO", "[dry-run] Skipped writing CSVs, usage logs, and Anki addNotes.")
 
     if failures:
         _safe_printerr(f"[WARN] {len(failures)} item(s) failed and were skipped.")

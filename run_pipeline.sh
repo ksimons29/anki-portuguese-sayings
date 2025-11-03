@@ -2,21 +2,76 @@
 unset ANKI_BASE
 set -euo pipefail
 
+usage() {
+  cat <<'EOF'
+Usage: ./run_pipeline.sh [options]
+
+Options:
+  --dry-run            Process entries but skip CSV writes / Anki
+  --limit N            Limit number of normalized items to process (default 0 = no limit)
+  --deck NAME          Override target Anki deck
+  --model NAME         Override target Anki model
+  --log-level LEVEL    Transformer log level (DEBUG|INFO|WARN|ERROR|SILENT)
+  --inbox PATH         Override inbox quick.jsonl path (for testing)
+  -h, --help           Show this help and exit
+
+Environment defaults:
+  PIPELINE_LOG_LEVEL / PIPELINE_INBOX
+  ANKI_DECK / ANKI_MODEL
+Dry-run and limit default to full production unless a CLI flag is provided.
+EOF
+}
+
+# ---- Defaults / options ----
+DRY_RUN=0
+LIMIT=0
+LOG_LEVEL="${PIPELINE_LOG_LEVEL:-INFO}"
+DECK="${ANKI_DECK:-Portuguese Mastery (pt-PT)}"
+MODEL="${ANKI_MODEL:-GPT Vocabulary Automater}"
+INBOX_OVERRIDE="${PIPELINE_INBOX:-}"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dry-run) DRY_RUN=1 ;;
+    --limit) LIMIT="${2:?--limit requires an argument}"; shift ;;
+    --deck) DECK="${2:?--deck requires an argument}"; shift ;;
+    --model) MODEL="${2:?--model requires an argument}"; shift ;;
+    --log-level) LOG_LEVEL="${2:?--log-level requires an argument}"; shift ;;
+    --inbox) INBOX_OVERRIDE="${2:?--inbox requires a path}"; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "[err] Unknown option: $1" >&2; usage >&2; exit 2 ;;
+  esac
+  shift
+done
+
 # ---- Env ----
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 export PYTHONIOENCODING=UTF-8
 
 ICLOUD_ROOT="$HOME/Library/Mobile Documents/com~apple~CloudDocs"
-[ -d "$ICLOUD_ROOT" ] || { echo "[err] iCloud root not found: $ICLOUD_ROOT"; exit 1; }
+DEFAULT_DATA_DIR="$ICLOUD_ROOT/Portuguese/Anki"
+if [[ -n "$INBOX_OVERRIDE" ]]; then
+  QUICK="$INBOX_OVERRIDE"
+  INBOX="$(dirname "$QUICK")"
+  ANKI_DATA_DIR="$(dirname "$INBOX")"
+else
+  [[ -d "$ICLOUD_ROOT" ]] || { echo "[err] iCloud root not found: $ICLOUD_ROOT"; exit 1; }
+  ANKI_DATA_DIR="$DEFAULT_DATA_DIR"
+  INBOX="$ANKI_DATA_DIR/inbox"
+  QUICK="$INBOX/quick.jsonl"
+fi
 
-ANKI_DATA_DIR="$ICLOUD_ROOT/Portuguese/Anki"
-INBOX="$ANKI_DATA_DIR/inbox"
-QUICK="$INBOX/quick.jsonl"
 TODAY="$(date +%F)"
-ROTATE_STAMP="$INBOX/.rotated-$TODAY"
 LOGDIR="$ANKI_DATA_DIR/logs"
-
 mkdir -p "$INBOX" "$LOGDIR"
+
+IS_DRY_RUN=0
+if [[ "$DRY_RUN" =~ ^(1|true|TRUE|yes|YES)$ ]]; then
+  IS_DRY_RUN=1
+fi
+
+echo "[config] deck='$DECK' model='$MODEL' limit=$LIMIT dry_run=$IS_DRY_RUN log_level=$LOG_LEVEL"
+echo "[config] inbox source: $QUICK"
 
 # ---- Optional log redirection (default ON unless NO_REDIRECT=1) ----
 if [[ -z "${NO_REDIRECT:-}" ]]; then
@@ -78,22 +133,33 @@ fi
 OPENAI_API_KEY="$(printf %s "$OPENAI_API_KEY" | LC_ALL=C tr -d '\r\n' | tr -d '“”‘’')"
 export OPENAI_API_KEY
 # If you use Azure, set OPENAI_BASE_URL, OPENAI_API_VERSION, and LLM_MODEL via Keychain or env and DO NOT unset them.
-# For public OpenAI we keep these unset:
 unset OPENAI_BASE_URL OPENAI_API_BASE OPENAI_ORG_ID
 
 # re-enable xtrace if it was on
 [[ -n "$XTRACE_WAS_ON" ]] && set -x
 echo "key_prefix=${OPENAI_API_KEY:0:6}"
+if (( IS_DRY_RUN == 1 )); then
+  echo "[mode] dry-run enabled (CSV/Anki writes skipped)"
+else
+  echo "[mode] production run (writes + Anki enabled)"
+fi
 
-# ---- Prepare scratch copy of the inbox ----
+# ---- Ensure inbox exists and copy to scratch ----
+if [[ ! -r "$QUICK" ]]; then
+  echo "[inbox] ERROR: inbox file missing or unreadable: $QUICK" >&2
+  exit 1
+fi
 SCRATCH="$(mktemp -t quick_copy.XXXXXX.jsonl)"
-if ! /bin/cp -f "$QUICK" "$SCRATCH" 2>/dev/null; then
-  echo "[inbox] WARN: $QUICK not found; creating empty scratch"
-  : > "$SCRATCH"
+/bin/cp -f "$QUICK" "$SCRATCH"
+if command -v stat >/dev/null 2>&1; then
+  SRC_BYTES="$(stat -f %z "$QUICK" 2>/dev/null || stat -c %s "$QUICK" 2>/dev/null || echo '?')"
+  SCR_BYTES="$(stat -f %z "$SCRATCH" 2>/dev/null || stat -c %s "$SCRATCH" 2>/dev/null || echo '?')"
+  echo "[inbox] source bytes: $SRC_BYTES"
+  echo "[inbox] scratch bytes: $SCR_BYTES"
 fi
 
 # Bail clearly when there's nothing to do
-if [ ! -s "$SCRATCH" ]; then
+if [[ ! -s "$SCRATCH" ]]; then
   echo "[inbox] scratch is empty; nothing to process."
   exit 0
 fi
@@ -102,18 +168,23 @@ fi
 PY="$HOME/anki-tools/.venv/bin/python"
 [ -x "$PY" ] || PY="$(command -v python3)"
 
-# Allow deck/model overrides via env
-: "${ANKI_DECK:=Portuguese Mastery (pt-PT)}"
-: "${ANKI_MODEL:=GPT Vocabulary Automater}"
+declare -a PY_ARGS=(
+  --deck "$DECK"
+  --model "$MODEL"
+  --inbox-file "$SCRATCH"
+  --limit "$LIMIT"
+  --log-level "$LOG_LEVEL"
+)
+if (( IS_DRY_RUN == 1 )); then
+  PY_ARGS+=(--dry-run 1)
+fi
 
-"$PY" -u "$HOME/anki-tools/transform_inbox_to_csv.py" \
-  --deck "$ANKI_DECK" \
-  --model "$ANKI_MODEL" \
-  --inbox-file "$SCRATCH" \
-  --limit 1
+"$PY" -u "$HOME/anki-tools/transform_inbox_to_csv.py" "${PY_ARGS[@]}"
 
 # ---- Sync Anki (optional but nice) ----
-curl -s http://127.0.0.1:8765 -X POST \
-     -d '{"action":"sync","version":6}' >/dev/null 2>&1 || true
+if (( IS_DRY_RUN == 0 )); then
+  curl -s http://127.0.0.1:8765 -X POST \
+       -d '{"action":"sync","version":6}' >/dev/null 2>&1 || true
+fi
 
 echo "[done] $TODAY"
