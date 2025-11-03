@@ -34,16 +34,17 @@ html,
 body {
   min-height: 100%;
   margin: 0;
-  background-color: var(--bg);
-  background-image: radial-gradient(140% 120% at 50% -12%, var(--accent-soft), transparent 60%);
-  background-repeat: no-repeat;
-  background-size: cover;
-  background-attachment: fixed;
+  background-color: var(--bg) !important;
+  background-image: radial-gradient(140% 120% at 50% -12%, var(--accent-soft), transparent 60%) !important;
+  background-repeat: no-repeat !important;
+  background-size: cover !important;
+  background-attachment: fixed !important;
+  color: var(--fg);
 }
 
-body {
-  color: var(--fg);
-  background-color: var(--bg) !important;
+#qa,
+#qa * {
+  background-color: transparent !important;
 }
 
 /* ---------- Card base ---------- */
