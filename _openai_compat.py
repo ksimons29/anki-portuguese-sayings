@@ -1,6 +1,7 @@
 
 from __future__ import annotations
 import json, os, urllib.request
+from urllib.error import HTTPError
 
 def _sanitize_key(k: str) -> str:
     if not k:
@@ -54,18 +55,32 @@ def chat(model: str, messages, temperature=0.2, top_p=0.95, max_tokens=300):
             "max_tokens": int(max_tokens),
         }
 
+    project_id = _sanitize_key(os.getenv("OPENAI_PROJECT",""))
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "Accept-Charset": "utf-8",
+        "User-Agent": "anki-tools/utf8-compat",
+    }
+    if project_id:
+        headers["OpenAI-Project"] = project_id
+
     req = urllib.request.Request(
         url,
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "Accept-Charset": "utf-8",
-            "User-Agent": "anki-tools/utf8-compat",
-        },
+        headers=headers,
     )
-    with urllib.request.urlopen(req, timeout=60) as r:
-        js = json.loads(r.read().decode("utf-8","strict"))
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            js = json.loads(r.read().decode("utf-8","strict"))
+    except HTTPError as err:
+        body = ""
+        try:
+            body = err.read().decode("utf-8", "replace")
+        except Exception:
+            body = str(err.reason)
+        detail = body.strip() or str(err.reason)
+        raise RuntimeError(f"OpenAI request failed ({err.code}): {detail}") from err
 
     # Normalize shape to look like Chat Completions for the caller
     if isinstance(js, dict) and "choices" in js and js["choices"] and "message" in js["choices"][0]:

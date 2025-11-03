@@ -150,7 +150,7 @@ flowchart LR
   end
 
   subgraph Secrets["Secrets"]
-    KC["Keychain (anki-tools-openai)"]
+    KC["Keychain (anki-tools-openai / …-project)"]
   end
 
   subgraph Anki["Anki Desktop + AnkiConnect"]
@@ -193,6 +193,7 @@ Manual kickstart: `bash ~/anki-tools/run_pipeline.sh`
 ### Automation notes
 - `run_pipeline.sh` auto-opens Anki via `open -a Anki`, waits for AnkiConnect, and on production runs refreshes the collection UI then triggers an Anki sync so the new notes are visible immediately.
 - By default the script performs a full production import; add `--dry-run` when you want to rehearse without touching CSVs or Anki.
+- Use `--clear-inbox` on your last run of the day (e.g., the 21:00 slot) to archive that day’s `quick.jsonl` and start the next day with a blank inbox.
 - Flags like `--limit`, `--deck`, `--model`, `--log-level`, and `--inbox` let you trim batches, redirect output, or test against a scratch inbox.
 - The OpenAI key is loaded at runtime from the Keychain item `anki-tools-openai`; nothing is stored in env files or the repo.
 
@@ -267,6 +268,7 @@ If your note type uses different field names or order, update the model to match
 | `~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs/pipeline.YYYY-MM-DD.log` | Standard output log for each pipeline run (rotated daily). | ✅ Yes |
 | `~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs/pipeline.YYYY-MM-DD.err` | Error/stderr log for each pipeline run (rotated daily). | ✅ Yes |
 | `Keychain item: anki-tools-openai` | Securely stores your classic OpenAI API key (`sk-…`) for access by the pipeline. | ✅ Yes |
+| `Keychain item: anki-tools-openai-project` | Stores the OpenAI project id (`proj-…`) required for project-scoped keys. | ✅ Yes |
 | `~/anki-tools/.venv/` | Python virtual environment containing dependencies (`openai`, `requests`, etc.). | ✅ Yes |
 | `~/anki-tools/archive/` | Folder for deprecated helpers (`anki_from_csv_dual_audio.py`, `check_openai_key.py`, `import_all.sh`, `sanitize_quick_jsonl.py`, etc.). | 🚫 Not used |
 | `~/anki-tools/archive/backups/` | Historical `.bak` snapshots (e.g., prior `run_pipeline.sh`, `transform_inbox_to_csv.py`, `_openai_compat.py` variants). | 🚫 Not used |
@@ -305,7 +307,15 @@ security add-generic-password -a "$USER" -s "anki-tools-openai" -w 'sk-REDACTED'
 
 # Quick prefix check (shows first 6 chars only)
 security find-generic-password -a "$USER" -s "anki-tools-openai" -w | sed -E 's/^(.{6}).*/\1.../'
+
+# Store/Update the project id (required for sk-proj keys)
+security add-generic-password -a "$USER" -s "anki-tools-openai-project" -w 'proj-REDACTED' -U
+
+# Quick sanity check
+security find-generic-password -a "$USER" -s "anki-tools-openai-project" -w
 ```
+
+`run_pipeline.sh` now performs a `/v1/models` probe before each run; if either secret is wrong you’ll see a `[auth]` error in the log and the pipeline will stop before touching your inbox or CSVs.
 
 ### 3) Anki + AnkiConnect
 - Install **AnkiConnect** add-on.
@@ -568,7 +578,8 @@ remaining = [t for t in toks if t.lower() not in _STOPWORDS]
 ### Exact logic used by `extract_lemma(raw)`
 1. **Short phrases (≤ 3 tokens):** keep the phrase **as-is** (stopwords are **not** applied in this branch).
 2. **Pattern “to VERB”:** if we detect “to VERB” (e.g., “have to **print**”), choose that verb → `print`.
-3. **Otherwise (longer inputs):**
+3. **Conversational requests (5–8 tokens):** keep the trimmed phrase intact (e.g., “Short back and sides, longer on top”) so hair-salon style commands don’t collapse to a single word.
+4. **Otherwise (longer inputs):**
    - Remove stopwords using the line above.
    - If anything remains:
      - If `"print"` is among them, return `"print"` (special case).
@@ -587,6 +598,7 @@ remaining = [t for t in toks if t.lower() not in _STOPWORDS]
 | `we will be at the airport`     | we, will, be, at, the, airport      | **airport**                    | **airport** → `content-longest` |
 | `the red box on the table`      | the, red, box, on, the, table       | red, box, **table**            | **table** → `content-longest`   |
 | `that's it`                     | that’s, it                          | *(≤ 3 tokens; no stopwords)*   | **that’s it** → `short-phrase`  |
+| `Short back and sides, longer on top.` | short, back, and, sides, longer, on, top | *(kept intact; trimmed punctuation)* | **Short back and sides, longer on top** → `phrase-extended` |
 
 > Note: Because short phrases (≤ 3 tokens) skip stopword removal, entries like “that’s it” are kept verbatim by design.
 
@@ -594,6 +606,7 @@ remaining = [t for t in toks if t.lower() not in _STOPWORDS]
 - **English-only list:** `_STOPWORDS` is English. If you’ll input Portuguese here, consider adding a small PT list (e.g., `de, a, o, e, do, da, em, um, uma, para, com, por, que, no, na…`) to get similar behavior.
 - **“Longest remaining token” heuristic:** This favors nouns like *airport/table*. If you prefer a different behavior (e.g., “first remaining token” or “prefer verbs”), adjust the selection step.
 - **Special cases:** There’s a targeted special-case for `"print"` because it occurs frequently; you can add more if helpful.
+- **Single-word duplicates:** If a lemma resolves to a single token that already exists in `sayings.csv`, the pipeline now skips it before calling the LLM (a `[dup-word]` log entry will appear).
 
 ### Optional tweaks (if you ever want them)
 - **Also apply stopwords to short phrases:** Change the `len(toks) <= 3` branch to drop stopwords first; this would, for example, turn “that’s it” → “that’s” (or map it via an idiom list).
@@ -629,6 +642,9 @@ https://platform.openai.com/usage
 
 ## 🗒️ Changelog
 - **2025‑11‑03**
+  - Added OpenAI project-key support and a `/v1/models` preflight check with human-readable failures; document storing both `anki-tools-openai` and `anki-tools-openai-project` in Keychain.
+  - Extended lemma/duplicate logic to keep 5–8 token instructions intact (`phrase-extended`) and skip single-word lemmas already present in `sayings.csv`.
+  - Added a `--clear-inbox` flag so the final daily run archives + truncates `quick.jsonl`, keeping the next morning’s inbox empty by default.
   - Added automated pytest suite (`tests/test_transform_inbox.py`) covering inbox parsing, lemma extraction, CSV writes, Anki auto-launch retry, UI refresh, and dry-run/full pipeline behaviors.
   - Reworked `run_pipeline.sh` to default to production runs, accept CLI overrides, auto-launch Anki, force a UI refresh, and trigger a post-import sync.
   - Documented automation behavior and testing workflow in this README.

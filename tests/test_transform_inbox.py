@@ -81,6 +81,9 @@ def test_extract_lemma_variants():
     lemma, rule = mod.extract_lemma("Keep the refrigerator organized")
     assert lemma == "refrigerator"
     assert rule == "content-longest"
+    lemma, rule = mod.extract_lemma("Short back and sides, longer on top.")
+    assert lemma == "Short back and sides, longer on top"
+    assert rule == "phrase-extended"
 
 
 def test_append_rows_and_load_existing(tmp_path):
@@ -202,5 +205,47 @@ def test_main_writes_csv_and_calls_anki(monkeypatch, tmp_base):
     assert rows[1][0] == "mock"
     assert calls["deck"] == "Portuguese Mastery (pt-PT)"
     assert calls["model"] == "GPT Vocabulary Automater"
-    assert len(calls["rows"]) == 2
+    assert len(calls["rows"]) == 1
     assert refresh_called["count"] == 1
+
+
+def test_main_skips_existing_single_word(monkeypatch, tmp_base):
+    calls = {"ask": 0}
+
+    def fake_ask_llm(word):
+        calls["ask"] += 1
+        return (
+            {
+                "word_en": word,
+                "word_pt": "mock",
+                "sentence_pt": "Frase de exemplo.",
+                "sentence_en": "Example sentence.",
+            },
+            {},
+            {},
+        )
+
+    monkeypatch.setattr(mod, "ask_llm", fake_ask_llm)
+    mod.MASTER_CSV.write_text(
+        "word_en,word_pt,sentence_pt,sentence_en,date_added\naround,redor,Frase.,Sentence.,2025-11-01\n",
+        encoding="utf-8",
+    )
+    mod.INBOX_DIR.mkdir(parents=True, exist_ok=True)
+    mod.INBOX_FILE.write_text(
+        json.dumps({"entries": ["around", "Square neckline"]}) + "\n", encoding="utf-8"
+    )
+
+    added_rows = []
+
+    def fake_add_notes(deck, model, rows):
+        added_rows.extend(rows)
+        return len(rows), list(range(len(rows)))
+
+    monkeypatch.setattr(mod, "add_notes_to_anki", fake_add_notes)
+    monkeypatch.setattr(mod, "refresh_anki_ui", lambda: None)
+
+    exit_code = mod.main(["--log-level", "SILENT"])
+    assert exit_code == 0
+    assert calls["ask"] == 1
+    assert len(added_rows) == 1
+    assert added_rows[0][0] == "Square neckline"

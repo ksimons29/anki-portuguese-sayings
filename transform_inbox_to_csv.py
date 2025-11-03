@@ -21,6 +21,7 @@ import datetime as dt
 import errno
 import io
 import json
+import html
 import os
 import re
 import subprocess
@@ -103,6 +104,8 @@ _SMART_MAP = {
     "\u202f": " ",
 }
 
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+
 
 def _normalize_ascii_quotes(s: str) -> str:
     if not isinstance(s, str):
@@ -110,6 +113,33 @@ def _normalize_ascii_quotes(s: str) -> str:
     for k, v in _SMART_MAP.items():
         s = s.replace(k, v)
     return s
+
+
+def _normalize_sentence_for_key(value: str) -> str:
+    """
+    Normalize sentence text for duplicate comparison. Strips HTML wrappers,
+    unescapes entities, and collapses whitespace.
+    """
+    if not isinstance(value, str):
+        return ""
+    text = html.unescape(value)
+    text = (
+        text.replace("<br />", "\n")
+        .replace("<br>", "\n")
+        .replace("</div>", "\n")
+        .replace("<div>", "\n")
+    )
+    text = _HTML_TAG_RE.sub(" ", text)
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    return " ".join(text.split()).strip()
+
+
+def _sentence_duplicate_key(word_en: str, sentence_pt: str, sentence_en: str) -> Tuple[str, str, str]:
+    return (
+        (word_en or "").strip().lower(),
+        _normalize_sentence_for_key(sentence_pt),
+        _normalize_sentence_for_key(sentence_en),
+    )
 
 
 def _safe_printerr(msg: str):
@@ -357,6 +387,11 @@ def extract_lemma(raw: str) -> Optional[Tuple[str, str]]:
         lemma = m.group(1).lower()
         return (lemma, "to-VERB")
 
+    # Allow slightly longer conversational requests (<=8 tokens) to pass through intact.
+    if 5 <= len(toks) <= 8 and any(t.lower() not in _STOPWORDS for t in toks):
+        trimmed = _clean_spaces(re.sub(r"[.!?]+$", "", s))
+        return (trimmed, "phrase-extended")
+
     # remove stopwords, prefer a content token
     remaining = [t for t in toks if t.lower() not in _STOPWORDS]
     if remaining:
@@ -399,6 +434,27 @@ def load_existing_words(csv_path: Path) -> set:
     return seen
 
 
+def load_existing_sentence_pairs(csv_path: Path) -> set:
+    """
+    Return a set of (word_en, sentence_pt, sentence_en) keys to detect exact duplicates.
+    """
+    pairs = set()
+    if csv_path.exists() and csv_path.stat().st_size > 0:
+        with csv_path.open("r", encoding="utf-8", newline="") as f:
+            r = csv.reader(f)
+            header = True
+            for row in r:
+                if not row:
+                    continue
+                if header and row[:1] == ["word_en"]:
+                    header = False
+                    continue
+                if len(row) < 4:
+                    continue
+                pairs.add(_sentence_duplicate_key(row[0], row[2], row[3]))
+    return pairs
+
+
 def append_rows(csv_path: Path, rows: List[List[str]]) -> None:
     ensure_header(csv_path)
     with csv_path.open("a", encoding="utf-8", newline="") as f:
@@ -410,6 +466,40 @@ def append_rows(csv_path: Path, rows: List[List[str]]) -> None:
 # ===== ANKICONNECT =====
 _anki_launch_attempted = False
 _last_launch_ts: Optional[float] = None
+
+
+def _escape_for_anki_query(value: str) -> str:
+    return (value or "").replace('"', '\\"')
+
+
+def _get_anki_sentence_pairs(deck: str, word_en: str) -> set:
+    """
+    Return a set of normalized (sentence_pt, sentence_en) tuples already stored in Anki
+    for the given word.
+    """
+    query = f'deck:"{_escape_for_anki_query(deck)}" word_en:"{_escape_for_anki_query(word_en)}"'
+    res = anki_invoke({"action": "findNotes", "version": 6, "params": {"query": query}})
+    if res.get("error"):
+        raise RuntimeError(f"AnkiConnect findNotes error: {res['error']}")
+    note_ids = res.get("result") or []
+    if not note_ids:
+        return set()
+
+    info = anki_invoke({"action": "notesInfo", "version": 6, "params": {"notes": note_ids}})
+    if info.get("error"):
+        raise RuntimeError(f"AnkiConnect notesInfo error: {info['error']}")
+    pairs = set()
+    for note in info.get("result") or []:
+        fields = note.get("fields") or {}
+        existing_pt = _normalize_sentence_for_key(
+            (fields.get("sentence_pt") or {}).get("value", "")
+        )
+        existing_en = _normalize_sentence_for_key(
+            (fields.get("sentence_en") or {}).get("value", "")
+        )
+        if existing_pt or existing_en:
+            pairs.add((existing_pt, existing_en))
+    return pairs
 
 
 def _should_retry_connection(err: URLError) -> bool:
@@ -481,8 +571,32 @@ def add_notes_to_anki(
     tag = dt.datetime.now().strftime("auto_ptPT_%Y%m%d")
 
     notes: List[dict] = []
+    seen_pairs = set()
+    skipped_batch_duplicates = 0
+    skipped_existing_duplicates = 0
+    anki_sentence_cache: Dict[str, set] = {}
     for r in rows:
         word_en, word_pt, sentence_pt, sentence_en, date_added = r
+        key = _sentence_duplicate_key(word_en, sentence_pt, sentence_en)
+        if key in seen_pairs:
+            skipped_batch_duplicates += 1
+            _log(
+                "INFO",
+                f"[dup] Skipping {word_en} (identical sentences already in this batch).",
+            )
+            continue
+
+        cache_key = word_en.strip().lower()
+        if cache_key not in anki_sentence_cache:
+            anki_sentence_cache[cache_key] = _get_anki_sentence_pairs(deck, word_en)
+        if (key[1], key[2]) in anki_sentence_cache[cache_key]:
+            skipped_existing_duplicates += 1
+            _log(
+                "INFO",
+                f"[dup] Skipping {word_en} (identical sentences already in Anki).",
+            )
+            continue
+        seen_pairs.add(key)
 
         notes.append(
             {
@@ -496,9 +610,23 @@ def add_notes_to_anki(
                     "date_added": date_added,
                 },
                 "tags": ["auto", "pt-PT", tag],
-                "options": {"allowDuplicate": False, "duplicateScope": "deck"},
+                "options": {"allowDuplicate": True, "duplicateScope": "deck"},
             }
         )
+
+    if skipped_batch_duplicates:
+        _log(
+            "INFO",
+            f"[dup] Skipped {skipped_batch_duplicates} in-batch duplicate sentence(s).",
+        )
+    if skipped_existing_duplicates:
+        _log(
+            "INFO",
+            f"[dup] Skipped {skipped_existing_duplicates} sentence duplicate(s) already present in Anki.",
+        )
+
+    if not notes:
+        return 0, []
 
     can = anki_invoke(
         {"action": "canAddNotes", "version": 6, "params": {"notes": notes}}
@@ -690,11 +818,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     # Dedupe against CSV + within this batch
-    existing = load_existing_words(master_csv)
+    existing_words = load_existing_words(master_csv)
     seen, todo = set(), []
     for lemma, rule, original in normalized:
         k = lemma.strip().lower()
-        if not k or k in seen or k in existing:
+        if not k or k in seen:
+            continue
+        if " " not in k and k in existing_words:
+            _log("INFO", f"[dup-word] Skipping '{lemma}' (single-word already stored).")
             continue
         seen.add(k)
         todo.append((lemma, original))
@@ -755,6 +886,29 @@ def main(argv: Optional[List[str]] = None) -> int:
                     ["word_en", "word_pt", "sentence_pt", "sentence_en", "date_added"]
                 )
         return 1
+
+    if new_rows:
+        existing_pairs = load_existing_sentence_pairs(master_csv)
+        seen_pairs = set(existing_pairs)
+        filtered_rows: List[List[str]] = []
+        skipped_duplicates = 0
+        for row in new_rows:
+            key = _sentence_duplicate_key(row[0], row[2], row[3])
+            if key in seen_pairs:
+                skipped_duplicates += 1
+                _log(
+                    "INFO",
+                    f"[dup] Skipping {row[0]} (identical sentences already stored).",
+                )
+                continue
+            seen_pairs.add(key)
+            filtered_rows.append(row)
+        if skipped_duplicates:
+            _log(
+                "INFO",
+                f"[dup] Skipped {skipped_duplicates} row(s) due to identical sentences.",
+            )
+        new_rows = filtered_rows
 
     # print and log usage summary for this run
     _log(
