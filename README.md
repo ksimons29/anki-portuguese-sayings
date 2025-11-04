@@ -32,7 +32,7 @@ This Shortcut is your single capture UI on **iPhone**, **iPad**, and **Mac**.
 **Example JSONL line:** `{"word":"telemóvel"}`
 
 ### Guarantees
-* One entry per run (append mode with newline)
+* One entry, sentence or word, per run (append mode with newline)
 * Stable, machine friendly format for downstream processing
 
 <img width="1201" height="991" alt="image" src="https://github.com/user-attachments/assets/2e64e5a6-87de-45a5-ad00-45ff3f986a6f" />
