@@ -59,6 +59,9 @@ This Shortcut is your single capture UI on **iPhone**, **iPad**, and **Mac**.
 **Applies to:** Anki on macOS (Desktop) and iOS/iPadOS (AnkiMobile).  
 **Preset name:** `Portuguese Mastery (pt-PT)`  
 **Scheduler:** [FSRS – Free Spaced Repetition Scheduler](https://www.reddit.com/r/Anki/comments/15mab3r/fsrs_explained_part_1_what_it_is_and_how_it_works/)
+**Spaced Repetition:** https://en.wikipedia.org/wiki/Spaced_repetition 
+**Recall Test:** https://en.wikipedia.org/wiki/Recall_test
+
 
 ---
 
