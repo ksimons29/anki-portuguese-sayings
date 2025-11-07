@@ -53,15 +53,19 @@ This Shortcut is your single capture UI on **iPhone**, **iPad**, and **Mac**.
 
 ---
 
-## 🧠 Anki Preset: Portuguese Mastery (FSRS + Cognitive Science Setup)
+## 🧠 Anki Preset: Portuguese Mastery (FSRS + Cognitive Science Setup) 🔬 Why This Works (Condensed Science)
 
 **Goal:** maximize long-term Portuguese retention through evidence-based spaced repetition.  
-**Applies to:** Anki on macOS (Desktop) and iOS/iPadOS (AnkiMobile).  
-**Preset name:** `Portuguese Mastery (pt-PT)`  
-**Scheduler:** [FSRS – Free Spaced Repetition Scheduler](https://www.reddit.com/r/Anki/comments/15mab3r/fsrs_explained_part_1_what_it_is_and_how_it_works/)
-**Spaced Repetition:** https://en.wikipedia.org/wiki/Spaced_repetition 
-**Recall Test:** https://en.wikipedia.org/wiki/Recall_test
-
+- **Applies to:** Anki on macOS (Desktop) and iOS/iPadOS (AnkiMobile).  
+- **Preset name:** `Portuguese Mastery (pt-PT)`  
+- **Scheduler:** [FSRS – Free Spaced Repetition Scheduler](https://www.reddit.com/r/Anki/comments/15mab3r/fsrs_explained_part_1_what_it_is_and_how_it_works/)
+- **Spacing effect:** distributed retrievals (10 min → 30 min → days) exploit hippocampal reconsolidation, slowing forgetting (Cepeda et al., 2006). https://en.wikipedia.org/wiki/Spaced_repetition   
+- **Retrieval practice:** active recall strengthens memory more than rereading (Karpicke & Roediger 2008). https://en.wikipedia.org/wiki/Recall_test 
+- **Desirable difficulty:** ~10–15 % failure drives deeper encoding (Bjork 1994).  
+- **Interleaving:** mixing grammar + vocab improves generalization (Rohrer & Taylor 2007).  
+- **Dual coding:** text + audio (Joana TTS) activates multiple pathways (Paivio 1986).  
+- **Leech suspension:** removing chronic failures prevents interference (Pavlik & Anderson 2008).  
+- **FSRS algorithm:** machine-learned intervals model personal forgetting curves, giving 15–20 % higher retention vs classic SM-2.
 
 ---
 
@@ -84,18 +88,6 @@ This Shortcut is your single capture UI on **iPhone**, **iPad**, and **Mac**.
 | **Timers** | Max answer 30 s • Show timer ON • Stop on answer ON | Keeps recall effortful but brief. |
 | **FSRS** | Enabled ✅ • Desired retention 90 % • Optimize All Presets clicked | 0.9 target = best speed vs durability (Pavlik & Anderson 2008). |
 | **Advanced** | Max interval 365 • Historical retention 90 % | Aligns with human forgetting curves. |
-
----
-
-### 🔬 Why This Works (Condensed Science)
-
-- **Spacing effect:** distributed retrievals (10 min → 30 min → days) exploit hippocampal reconsolidation, slowing forgetting (Cepeda et al., 2006).  
-- **Retrieval practice:** active recall strengthens memory more than rereading (Karpicke & Roediger 2008).  
-- **Desirable difficulty:** ~10–15 % failure drives deeper encoding (Bjork 1994).  
-- **Interleaving:** mixing grammar + vocab improves generalization (Rohrer & Taylor 2007).  
-- **Dual coding:** text + audio (Joana TTS) activates multiple pathways (Paivio 1986).  
-- **Leech suspension:** removing chronic failures prevents interference (Pavlik & Anderson 2008).  
-- **FSRS algorithm:** machine-learned intervals model personal forgetting curves, giving 15–20 % higher retention vs classic SM-2.
 
 ---
 
