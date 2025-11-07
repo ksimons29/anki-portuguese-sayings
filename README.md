@@ -629,11 +629,15 @@ remaining = [t for t in toks if t.lower() not in _STOPWORDS]
 - **“No entries to process”**: inbox is empty (either not captured yet or already cleared today).
 - **Anki addNotes added 0/N**: check note type + field names, or duplicate check settings.
 - **Connection refused**: open Anki; confirm AnkiConnect is enabled.
-- **Unexpected duplicates**: with duplicate check on `word_pt`, ensure the front text is truly identical. Homographs (e.g., *assassino* noun vs adj.) can be disambiguated with POS tags or parentheses.
-Quick logs command for users:
-bash LOGDIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs"
-tail -n 80 "$LOGDIR/pipeline.$(date +%F).err"; echo "----"; tail -n 80 "$LOGDIR/pipeline.$(date +%F).log"
-
+- **Unexpected duplicates**: If your duplicate check is on `word_pt`, the *front* must be truly identical. Disambiguate homographs with POS or parentheses, e.g., `assassino (n.)` vs `assassino (adj.)`.  
+  **Logs (macOS)** — folder: `~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs`  
+  Show today’s last 80 lines (err + log) and open the folder in Finder:
+  ```bash
+  LOGDIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs"
+  open "$LOGDIR"
+  tail -n 80 "$LOGDIR/pipeline.$(date +%F).err" || true
+  echo "----"
+  tail -n 80 "$LOGDIR/pipeline.$(date +%F).log" || true
 ---
 
 ## 📊 Monitor usage
