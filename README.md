@@ -643,7 +643,7 @@ https://platform.openai.com/usage
 - **2025‑11‑03**
   - Added OpenAI project-key support and a `/v1/models` preflight check with human-readable failures; document storing both `anki-tools-openai` and `anki-tools-openai-project` in Keychain.
   - Extended lemma/duplicate logic to keep 5–8 token instructions intact (`phrase-extended`) and skip single-word lemmas already present in `sayings.csv`.
-  - Added a `--clear-inbox` flag so the final daily run archives + truncates `quick.jsonl`, keeping the next morning’s inbox empty by default.
+  - Added a `--clear-inbox` flag so the final daily run archives + truncates `quick.jsonl`, keeping the next morning's inbox empty by default. **Updated 2025-12-07:** Now ON by default (`CLEAR_INBOX=1`) to prevent duplicate word processing.
   - Added automated pytest suite (`tests/test_transform_inbox.py`) covering inbox parsing, lemma extraction, CSV writes, Anki auto-launch retry, UI refresh, and dry-run/full pipeline behaviors.
   - Reworked `run_pipeline.sh` to default to production runs, accept CLI overrides, auto-launch Anki, force a UI refresh, and trigger a post-import sync.
   - Documented automation behavior and testing workflow in this README.

@@ -30,7 +30,7 @@ LOG_LEVEL="${PIPELINE_LOG_LEVEL:-INFO}"
 DECK="${ANKI_DECK:-Portuguese Mastery (pt-PT)}"
 MODEL="${ANKI_MODEL:-GPT Vocabulary Automater}"
 INBOX_OVERRIDE="${PIPELINE_INBOX:-}"
-CLEAR_INBOX=0
+CLEAR_INBOX=1
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
