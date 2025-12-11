@@ -445,6 +445,7 @@ def generate_html_dashboard(cards: List[Dict[str, str]]) -> str:
         .words-table td {{
             padding: 15px;
             border-bottom: 1px solid #e2e8f0;
+            vertical-align: top;
         }}
 
         .words-table tr:hover {{
@@ -454,15 +455,34 @@ def generate_html_dashboard(cards: List[Dict[str, str]]) -> str:
         .word-pt {{
             font-weight: 600;
             color: #2d3748;
+            font-size: 1.1em;
         }}
 
         .word-en {{
             color: #718096;
+            font-size: 1.05em;
+        }}
+
+        .sentence-pt {{
+            color: #4a5568;
+            font-style: italic;
+            margin-top: 5px;
+            font-size: 0.95em;
+            line-height: 1.4;
+        }}
+
+        .sentence-en {{
+            color: #718096;
+            font-style: italic;
+            margin-top: 5px;
+            font-size: 0.9em;
+            line-height: 1.4;
         }}
 
         .date {{
             color: #a0aec0;
             font-size: 0.9em;
+            white-space: nowrap;
         }}
 
         .expand-icon {{
@@ -551,9 +571,9 @@ def generate_html_dashboard(cards: List[Dict[str, str]]) -> str:
                 <table class="words-table">
                     <thead>
                         <tr>
-                            <th>Portuguese</th>
-                            <th>English</th>
-                            <th>Date Added</th>
+                            <th style="width: 30%;">Portuguese Word & Sentence</th>
+                            <th style="width: 30%;">English Translation & Sentence</th>
+                            <th style="width: 12%;">Date Added</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -562,12 +582,29 @@ def generate_html_dashboard(cards: List[Dict[str, str]]) -> str:
         for card in sorted_cards:
             word_pt = card.get("word_pt", "").strip()
             word_en = card.get("word_en", "").strip()
+            sentence_pt = card.get("sentence_pt", "").strip()
+            sentence_en = card.get("sentence_en", "").strip()
             date = card.get("date_added", "")
 
+            # Escape HTML entities
+            word_pt_safe = word_pt.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            word_en_safe = word_en.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            sentence_pt_safe = sentence_pt.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            sentence_en_safe = sentence_en.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+            # Prepare search data
+            search_text = f"{word_pt} {word_en} {sentence_pt} {sentence_en}".lower()
+
             html += f"""
-                        <tr class="word-row" data-pt="{word_pt.lower()}" data-en="{word_en.lower()}">
-                            <td class="word-pt">{word_pt}</td>
-                            <td class="word-en">{word_en}</td>
+                        <tr class="word-row" data-search="{search_text}">
+                            <td>
+                                <div class="word-pt">{word_pt_safe}</div>
+                                <div class="sentence-pt">{sentence_pt_safe}</div>
+                            </td>
+                            <td>
+                                <div class="word-en">{word_en_safe}</div>
+                                <div class="sentence-en">{sentence_en_safe}</div>
+                            </td>
                             <td class="date">{date}</td>
                         </tr>
 """
@@ -600,10 +637,9 @@ def generate_html_dashboard(cards: List[Dict[str, str]]) -> str:
             const rows = document.querySelectorAll('.word-row');
 
             rows.forEach(row => {
-                const pt = row.getAttribute('data-pt');
-                const en = row.getAttribute('data-en');
+                const searchText = row.getAttribute('data-search');
 
-                if (pt.includes(searchTerm) || en.includes(searchTerm)) {
+                if (searchText.includes(searchTerm)) {
                     row.style.display = '';
                 } else {
                     row.style.display = 'none';
