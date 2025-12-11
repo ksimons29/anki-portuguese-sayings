@@ -116,10 +116,103 @@ def classify_card(word_en: str, word_pt: str, sentence_en: str, sentence_pt: str
     return "🔍 Other"
 
 
-# ===== CSV READING =====
+# ===== ANKI INTEGRATION =====
+
+import json
+import urllib.request
+from urllib.error import URLError
+
+ANKI_URL = "http://127.0.0.1:8765"
+
+def anki_invoke(payload: dict) -> dict:
+    """Call AnkiConnect API."""
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        ANKI_URL, data, headers={"Content-Type": "application/json"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except URLError as e:
+        raise RuntimeError(f"Could not connect to Anki. Is Anki running? Error: {e}")
+
+
+def load_cards_from_anki(deck_name: str = "Portuguese Mastery (pt-PT)") -> List[Dict[str, str]]:
+    """Load all cards directly from Anki using AnkiConnect."""
+    print(f"[anki] Connecting to Anki deck: {deck_name}")
+
+    # Find all note IDs in the deck
+    search_result = anki_invoke({
+        "action": "findNotes",
+        "version": 6,
+        "params": {"query": f'deck:"{deck_name}"'}
+    })
+
+    if search_result.get("error"):
+        raise RuntimeError(f"AnkiConnect error: {search_result['error']}")
+
+    note_ids = search_result.get("result", [])
+    print(f"[anki] Found {len(note_ids)} notes in deck")
+
+    if not note_ids:
+        return []
+
+    # Get full note info
+    notes_info = anki_invoke({
+        "action": "notesInfo",
+        "version": 6,
+        "params": {"notes": note_ids}
+    })
+
+    if notes_info.get("error"):
+        raise RuntimeError(f"AnkiConnect error: {notes_info['error']}")
+
+    # Convert to our format
+    cards = []
+    for note in notes_info.get("result", []):
+        fields = note.get("fields", {})
+        tags = note.get("tags", [])
+        note_id = note.get("noteId", "")
+
+        # Extract date from noteId (Anki IDs are timestamps in milliseconds)
+        try:
+            timestamp = int(note_id) / 1000
+            date_added = datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d")
+        except:
+            date_added = "Unknown"
+
+        word_en = fields.get("word_en", {}).get("value", "").strip()
+        word_pt = fields.get("word_pt", {}).get("value", "").strip()
+        sentence_pt = fields.get("sentence_pt", {}).get("value", "").strip()
+        sentence_en = fields.get("sentence_en", {}).get("value", "").strip()
+
+        if word_en and word_pt:
+            cards.append({
+                "word_en": word_en,
+                "word_pt": word_pt,
+                "sentence_pt": sentence_pt,
+                "sentence_en": sentence_en,
+                "date_added": date_added,
+                "tags": tags,
+                "note_id": note_id,
+            })
+
+    print(f"[anki] Loaded {len(cards)} cards with complete data")
+    return cards
+
 
 def load_cards() -> List[Dict[str, str]]:
-    """Load all cards from sayings.csv."""
+    """Load cards from Anki first, fallback to CSV if Anki unavailable."""
+    try:
+        return load_cards_from_anki()
+    except Exception as e:
+        print(f"[anki] Could not load from Anki: {e}")
+        print("[anki] Falling back to CSV file...")
+        return load_cards_from_csv()
+
+
+def load_cards_from_csv() -> List[Dict[str, str]]:
+    """Load all cards from sayings.csv (fallback)."""
     if not MASTER_CSV.exists() or MASTER_CSV.stat().st_size == 0:
         return []
 
