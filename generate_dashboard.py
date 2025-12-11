@@ -143,7 +143,7 @@ def load_cards() -> List[Dict[str, str]]:
 # ===== DASHBOARD GENERATION =====
 
 def generate_dashboard(cards: List[Dict[str, str]]) -> str:
-    """Generate detailed dashboard markdown."""
+    """Generate detailed dashboard markdown with clean table layout."""
     if not cards:
         return "# 🇵🇹 Portuguese Learning Overview\n\nNo cards found yet. Start capturing words!\n"
 
@@ -184,30 +184,37 @@ def generate_dashboard(cards: List[Dict[str, str]]) -> str:
     most_active = sorted_topics[0][0] if sorted_topics else "None"
     most_active_count = len(sorted_topics[0][1]) if sorted_topics else 0
 
-    # Generate markdown
+    # Generate markdown with clean layout
     lines = [
-        "# 🇵🇹 Portuguese Learning Overview",
-        f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        "═" * 60,
+        "🇵🇹  PORTUGUESE LEARNING OVERVIEW",
+        "═" * 60,
         "",
-        "## 📊 Summary",
-        f"- **Total cards**: {total}",
-        f"- **Added this week**: {this_week}",
-        f"- **Added this month**: {this_month}",
-        f"- **Most active area**: {most_active} ({most_active_count} cards)",
+        f"📅  Last updated: {datetime.now().strftime('%A, %B %d, %Y at %H:%M')}",
+        f"📊  Total vocabulary: {total} cards",
         "",
-        "---",
+        "─" * 60,
         "",
-        "## 📂 By Category",
+        "📈  RECENT ACTIVITY",
+        "",
+        f"  This week:     {this_week} new cards",
+        f"  This month:    {this_month} new cards",
+        f"  Top category:  {most_active} ({most_active_count} cards)",
+        "",
+        "═" * 60,
         "",
     ]
 
-    # Add each topic section with ALL cards
+    # Add each topic section with clean table
     for topic, topic_cards in sorted_topics:
         count = len(topic_cards)
         percentage = (count / total * 100) if total > 0 else 0
 
-        lines.append(f"### {topic} — {count} cards ({percentage:.1f}%)")
-        lines.append("")
+        lines.extend([
+            f"{topic}  •  {count} cards  •  {percentage:.1f}%",
+            "─" * 60,
+            "",
+        ])
 
         # Sort cards by date (most recent first)
         sorted_cards = sorted(
@@ -216,44 +223,55 @@ def generate_dashboard(cards: List[Dict[str, str]]) -> str:
             reverse=True
         )
 
-        # List ALL cards in this category
+        # Create clean table with all cards
+        lines.append("PORTUGUESE               ENGLISH                        DATE")
+        lines.append("─" * 60)
+
         for card in sorted_cards:
             word_pt = card.get("word_pt", "").strip()
             word_en = card.get("word_en", "").strip()
             date = card.get("date_added", "")
 
             if word_pt and word_en:
-                lines.append(f"• **{word_pt}** → {word_en} `{date}`")
+                # Truncate if too long for clean display
+                pt_display = (word_pt[:22] + "...") if len(word_pt) > 25 else word_pt
+                en_display = (word_en[:28] + "...") if len(word_en) > 31 else word_en
 
-        lines.append("")
-        lines.append("---")
-        lines.append("")
+                # Format with padding
+                lines.append(f"{pt_display:<25}{en_display:<31}{date}")
+
+        lines.extend([
+            "",
+            "═" * 60,
+            "",
+        ])
 
     # Add insights section
     lines.extend([
-        "## 🎯 Insights",
+        "🎯  INSIGHTS & RECOMMENDATIONS",
+        "─" * 60,
         "",
     ])
 
     if sorted_topics:
         strongest = sorted_topics[0]
-        lines.append(f"• Your strongest area is **{strongest[0]}** with {len(strongest[1])} cards")
+        lines.append(f"✓ Strongest area: {strongest[0]} with {len(strongest[1])} cards")
 
         if len(sorted_topics) > 1:
             weakest = sorted_topics[-1]
             if weakest[0] != "🔍 Other":
-                lines.append(f"• **{weakest[0]}** has only {len(weakest[1])} cards — consider capturing more!")
+                lines.append(f"! Opportunity: {weakest[0]} has only {len(weakest[1])} cards")
 
         if this_week > 0:
-            lines.append(f"• Great momentum: {this_week} new cards this week!")
+            lines.append(f"🔥 Great momentum: {this_week} new cards this week!")
         elif this_month > 0:
-            lines.append(f"• {this_month} cards this month — keep it up!")
+            lines.append(f"📚 Steady progress: {this_month} cards this month")
 
     lines.extend([
         "",
-        "---",
-        "",
-        f"*Auto-generated from sayings.csv ({total} cards)*",
+        "═" * 60,
+        f"Auto-generated from sayings.csv  •  {total} total cards",
+        "═" * 60,
     ])
 
     return "\n".join(lines)
