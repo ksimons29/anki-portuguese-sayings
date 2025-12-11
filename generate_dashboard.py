@@ -153,20 +153,48 @@ def load_cards() -> List[Dict[str, str]]:
     skipped_rows = 0
 
     with MASTER_CSV.open("r", encoding="utf-8", newline="") as f:
-        reader = csv.DictReader(f)
-        print(f"[DEBUG] CSV headers: {reader.fieldnames}")
+        # Peek at first line to detect format
+        first_line = f.readline().strip()
+        f.seek(0)  # Reset to beginning
 
-        for i, row in enumerate(reader):
-            total_rows += 1
-            if row.get("word_en"):  # Skip empty rows
-                cards.append(row)
-            else:
-                skipped_rows += 1
-                if i < 3:  # Show first few skipped rows
-                    print(f"[DEBUG] Skipped row {i}: {row}")
+        # Check if file has proper headers
+        has_headers = "word_en" in first_line or "word_pt" in first_line
+
+        if has_headers:
+            # Standard format with headers
+            reader = csv.DictReader(f)
+            print(f"[DEBUG] CSV has headers: {reader.fieldnames}")
+
+            for i, row in enumerate(reader):
+                total_rows += 1
+                if row.get("word_en"):
+                    cards.append(row)
+                else:
+                    skipped_rows += 1
+        else:
+            # No headers - read as raw CSV and map columns
+            # Format: date_added, word_pt, word_en, sentence_pt, sentence_en
+            print(f"[DEBUG] CSV has NO headers - using positional columns")
+            print(f"[DEBUG] Assumed format: date_added, word_pt, word_en, sentence_pt, sentence_en")
+
+            reader = csv.reader(f)
+            for i, row in enumerate(reader):
+                total_rows += 1
+                if len(row) >= 5 and row[2].strip():  # word_en is in column 2
+                    cards.append({
+                        "date_added": row[0].strip(),
+                        "word_pt": row[1].strip(),
+                        "word_en": row[2].strip(),
+                        "sentence_pt": row[3].strip(),
+                        "sentence_en": row[4].strip() if len(row) > 4 else "",
+                    })
+                else:
+                    skipped_rows += 1
+                    if i < 3:
+                        print(f"[DEBUG] Skipped row {i}: {row[:3] if len(row) >= 3 else row}")
 
     print(f"[DEBUG] Total rows read: {total_rows}")
-    print(f"[DEBUG] Rows with word_en: {len(cards)}")
+    print(f"[DEBUG] Cards loaded: {len(cards)}")
     print(f"[DEBUG] Skipped rows: {skipped_rows}")
 
     return cards
