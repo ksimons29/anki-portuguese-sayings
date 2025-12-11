@@ -3,7 +3,9 @@
 
 A clean, end-to-end pipeline that turns quick notes on your **iPhone, iPad, or Mac** into high-quality **Anki** cards—automatically.
 
-> **NEW**: 🎙️ **Audio Capture & Dashboard Add-On** — Record longer Portuguese conversations with Voice Memos transcription, plus get an auto-generated learning overview in Apple Notes. See [QUICK_START_DASHBOARD.md](QUICK_START_DASHBOARD.md) for setup.
+> **NEW**: 🎨 **Interactive HTML Dashboard** — Get a beautiful, browser-based overview of your Portuguese vocabulary pulled directly from Anki! Features searchable categories (Gym, Dating, Work, Admin, Daily Life), stats, and full sentences. Auto-updates at 21:00 daily. See [Dashboard](#-interactive-html-dashboard) below.
+>
+> **NEW**: 🎙️ **Voice Memos Transcription** — Record longer Portuguese conversations on iPhone/iPad/Mac with built-in Portuguese transcription, then extract vocabulary into your learning pipeline. See [Voice Memos](#%EF%B8%8F-voice-memos-transcription-for-longer-conversations) below.
 
 - ✍️ **Capture** → use the Shortcut **Save to AnkiInbox** (prompts you to type or dictate a word in **Portuguese or English**).
 - 🧠 **Normalize to a lemma** → smart rules + stopwords pick the meaningful keyword (see “Stopwords & Lemma Extraction” below).
@@ -39,6 +41,359 @@ This Shortcut is your single capture UI on **iPhone**, **iPad**, and **Mac**.
 
 <img width="1201" height="991" alt="image" src="https://github.com/user-attachments/assets/2e64e5a6-87de-45a5-ad00-45ff3f986a6f" />
 <img width="776" height="575" alt="image" src="https://github.com/user-attachments/assets/15bffdd5-0416-427a-bb2c-d5ac2c9ebc34" />
+
+---
+
+## 🎨 Interactive HTML Dashboard
+
+Get a **live, visual overview** of your Portuguese learning progress with a beautiful browser-based dashboard that pulls data **directly from your Anki deck**.
+
+### ✨ Features
+
+- **📊 Real-time Stats**: Total cards, this week, this month, number of categories
+- **🗂️ Smart Categories**: Cards auto-classified into topics (💪 Gym, ❤️ Dating, 💼 Work, 📋 Admin, 🏡 Daily Life, 🔍 Other)
+- **🔍 Live Search**: Instantly filter cards by typing Portuguese or English
+- **📖 Full Context**: Shows both Portuguese and English words AND sentences
+- **🎯 Expandable Sections**: Click any category to see all cards, collapse to hide
+- **📅 Sorted by Date**: Most recent cards appear first in each category
+- **🎨 Beautiful Design**: Purple gradient background, clean card layout, mobile-responsive
+- **🔄 Auto-Updates**: Regenerates every evening at 21:00 when your pipeline runs
+
+### 🚀 Quick Start
+
+**One-time setup** (requires Anki to be running):
+
+```bash
+cd ~/anki-tools
+git pull origin claude/apple-anki-portuguese-workflow-015jhBxxAsn9atLhGspFuobz
+source .venv/bin/activate
+python generate_dashboard_html.py
+```
+
+The dashboard will:
+1. Open **Anki** automatically (if not already running)
+2. Pull **all cards** from your `Portuguese Mastery (pt-PT)` deck via AnkiConnect
+3. Classify cards into categories using bilingual keyword matching
+4. Generate a beautiful HTML file on your **Desktop**: `Portuguese-Dashboard.html`
+5. **Auto-open** in your default browser
+
+### 📊 What You'll See
+
+```
+🇵🇹 Portuguese Learning Dashboard
+Last updated: Wednesday, December 11, 2025 at 16:45
+📊 Data source: Anki Database (Live)
+
+┌─────────────────────────────────────────┐
+│  627        23         89         6     │
+│  Total    This Week  This Month Categories│
+└─────────────────────────────────────────┘
+
+🔍 Search words in Portuguese or English...
+
+💪 Gym  •  127 cards  •  20.3%
+────────────────────────────────────────────
+Top words: aumentar a carga, fazer agachamentos, treino de força...
+▼ [Click to expand]
+
+[When expanded, shows full table:]
+Portuguese Word & Sentence          English Translation & Sentence     Date Added
+────────────────────────────────────────────────────────────────────────────────
+aumentar a carga                    increase the weight               2025-12-11
+Preciso de aumentar a carga...      I need to increase the weight...
+
+fazer agachamentos                  do squats                         2025-12-10
+Vou fazer agachamentos hoje...      I'm going to do squats today...
+```
+
+### 🎯 How It Works
+
+1. **Data Source**: Uses **AnkiConnect API** (localhost:8765) to pull live data from Anki
+2. **Classification**: Scans all card fields (word_pt, word_en, sentence_pt, sentence_en) for keywords
+3. **Scoring**: Each category has bilingual keyword lists (e.g., Gym: "treino", "gym", "workout", "músculo")
+4. **Assignment**: Card goes to the category with the highest keyword match count
+5. **Fallback**: Cards with no matches go to "🔍 Other"
+
+### 🔄 Automatic Updates
+
+The dashboard **auto-regenerates at 21:00** every night as part of your pipeline:
+
+```bash
+# In run_pipeline.sh (line 247-254):
+CURRENT_HOUR=$(date +%H)
+if (( IS_DRY_RUN == 0 )) && [[ "$CURRENT_HOUR" == "21" ]]; then
+  echo "[dashboard] Running HTML dashboard generation (21:00 daily update)..."
+  "$PY" "$HOME/anki-tools/generate_dashboard_html.py"
+fi
+```
+
+**Manual refresh** anytime:
+```bash
+cd ~/anki-tools && source .venv/bin/activate && python generate_dashboard_html.py
+```
+
+### 📂 Files
+
+| File | Purpose |
+|------|---------|
+| `~/anki-tools/generate_dashboard_html.py` | Main generator script (pulls from Anki, classifies, generates HTML) |
+| `~/Desktop/Portuguese-Dashboard.html` | Output file (open in any browser) |
+| `~/anki-tools/generate_dashboard.py` | Legacy Apple Notes version (deprecated) |
+
+### 🔧 Customization
+
+**Change categories**: Edit keyword lists in `generate_dashboard_html.py` (lines 24-62):
+
+```python
+TOPIC_KEYWORDS = {
+    "💪 Gym": [
+        "gym", "workout", "exercise", "treino", "músculo", "peso", ...
+    ],
+    "🍳 Cooking": [  # Add your own!
+        "recipe", "cook", "bake", "receita", "cozinhar", "forno", ...
+    ],
+}
+```
+
+**Change output location**: Edit line 702:
+```python
+output_path = Path.home() / "Desktop" / "Portuguese-Dashboard.html"
+# Change to: Path.home() / "Documents" / "dashboard.html"
+```
+
+### ⚠️ Requirements
+
+- **Anki must be running** when you generate the dashboard (AnkiConnect needs port 8765)
+- **AnkiConnect add-on installed** in Anki
+- Deck name must match: `Portuguese Mastery (pt-PT)` (or edit line 140)
+- Note type must have fields: `word_en`, `word_pt`, `sentence_pt`, `sentence_en`
+
+### 🐞 Troubleshooting
+
+**"Could not connect to Anki"**:
+```bash
+# 1. Check if Anki is running
+ps aux | grep -i anki
+
+# 2. Test AnkiConnect manually
+curl http://127.0.0.1:8765 -X POST -d '{"action":"version","version":6}'
+# Should return: {"result":5,"error":null}
+
+# 3. Open Anki first, then run dashboard
+open -a "Anki"
+sleep 3
+cd ~/anki-tools && source .venv/bin/activate && python generate_dashboard_html.py
+```
+
+**Dashboard shows 0 cards**:
+- Check deck name matches exactly: `Portuguese Mastery (pt-PT)`
+- Verify cards exist in Anki (Browse → search: `deck:"Portuguese Mastery (pt-PT)"`)
+
+**HTML looks broken / data in wrong columns**:
+- Pull latest fixes: `cd ~/anki-tools && git pull`
+- The fix ensures proper HTML entity escaping for Portuguese special characters
+
+---
+
+## 🎙️ Voice Memos Transcription for Longer Conversations
+
+For **longer Portuguese conversations** (beyond single words/phrases), use **Voice Memos** with built-in transcription, then extract vocabulary into your learning pipeline.
+
+### 🎯 Use Cases
+
+- **At the gym**: Record your trainer's instructions in Portuguese, review later
+- **Conversations**: Capture longer exchanges to extract useful phrases
+- **Podcast notes**: Record yourself summarizing Portuguese content
+- **Speaking practice**: Record yourself speaking Portuguese, transcribe, and learn from mistakes
+
+### 📱 How to Use Voice Memos Transcription
+
+#### **On iPhone/iPad** (iOS 17+ / iPadOS 17+)
+
+1. **Open Voice Memos** app (built-in)
+
+2. **Start Recording**:
+   - Tap the **red record button**
+   - Speak in Portuguese (switch between English/Portuguese naturally)
+   - Tap **Stop** when done
+
+3. **Get Transcription**:
+   - Tap the recording you just made
+   - Tap the **quote bubble icon** (transcript) at bottom right
+   - iOS will **auto-transcribe** the Portuguese audio
+   - Wait a few seconds for transcription to complete
+
+4. **Review & Extract**:
+   - Read through the Portuguese transcript
+   - Identify words/phrases you want to learn
+   - **Select text** → **Copy**
+
+5. **Send to Anki**:
+   - Open **Notes** app (or anywhere you can type)
+   - **Paste** the Portuguese text
+   - Add to **Apple Notes** with header like:
+     ```
+     # Gym Conversation - 2025-12-11
+
+     [Paste full Portuguese transcript here]
+
+     **Words to learn:**
+     - aumentar a carga
+     - fazer agachamentos
+     - série completa
+     ```
+
+6. **Capture Individual Words**:
+   - From your Notes overview, identify specific words
+   - For each word, run your **"Save to AnkiInbox"** Shortcut
+   - Type or dictate each word individually
+   - Pipeline will enrich and add to Anki at next run (09:00, 13:00, 17:00, or 21:00)
+
+#### **On Mac** (macOS 14 Sonoma+)
+
+1. **Open Voice Memos** app (built-in)
+
+2. **Record** (using Mac microphone):
+   - Click **red record button**
+   - Speak Portuguese
+   - Click **Stop**
+
+3. **Get Transcription**:
+   - Select the recording
+   - Click **transcript icon** (quote bubble) in playback controls
+   - macOS auto-transcribes Portuguese audio
+
+4. **Extract to Notes**:
+   - Select transcript text
+   - Copy/paste into **Apple Notes** or **TextEdit**
+   - Organize by date, topic, or source
+
+5. **Feed into Pipeline**:
+   - Review transcript, identify vocabulary
+   - Use **"Save to AnkiInbox"** Shortcut for each word (or type directly into `quick.jsonl`)
+
+### 🌐 Language Support
+
+Voice Memos supports **Portuguese transcription** on:
+- **iOS 17+** (iPhone/iPad)
+- **macOS 14+** (Sonoma and later)
+
+**Supported languages** for transcription:
+- Portuguese (European & Brazilian)
+- English
+- Spanish, French, German, Italian, Japanese, Korean, Mandarin Chinese, Cantonese, and more
+
+The transcription **auto-detects language** based on what you speak, so you can switch between English and Portuguese mid-recording.
+
+### 📝 Best Practices
+
+**1. Record Short Segments** (2-5 minutes):
+- Easier to transcribe accurately
+- Faster to review
+- Less overwhelming to extract vocabulary
+
+**2. Speak Clearly**:
+- Moderate pace (not too fast)
+- Minimize background noise
+- Hold device 6-12 inches from mouth
+
+**3. Organize by Topic**:
+```
+Apple Notes Structure:
+📁 Portuguese Learning
+  📄 Gym Conversations
+  📄 Restaurant Phrases
+  📄 Work Meetings
+  📄 Daily Errands
+```
+
+**4. Batch Extract**:
+- Record multiple conversations throughout the day
+- Review all transcripts in evening
+- Extract 5-10 new words per session
+- Add to Anki inbox using Shortcut
+
+**5. Verify Transcription**:
+- Voice Memos transcription is **good but not perfect**
+- Always review Portuguese text for errors
+- Common mistakes: homophones, accents, proper nouns
+- Correct before adding to Anki
+
+### 🔄 Complete Workflow Example
+
+**Scenario**: You had a 3-minute conversation with your Portuguese trainer at the gym.
+
+1. **Record** (iPhone Voice Memos):
+   - Open Voice Memos
+   - Record the conversation in real-time
+   - Tap Stop
+
+2. **Transcribe** (automatic):
+   - Tap recording → tap transcript icon
+   - Wait 10-30 seconds for transcription
+   - Review Portuguese text
+
+3. **Organize** (Apple Notes):
+   ```
+   # Gym - Treino de Força - 2025-12-11
+
+   [Full Portuguese transcript pasted here]
+
+   **New vocabulary identified:**
+   - aumentar a carga → increase the weight
+   - série completa → full set
+   - recuperação muscular → muscle recovery
+   - alongamento dinâmico → dynamic stretching
+   ```
+
+4. **Capture** (Shortcut):
+   - For each word, run "Save to AnkiInbox" Shortcut
+   - Type/dictate: `aumentar a carga`
+   - Repeat for other words
+
+5. **Enrich** (automatic at next pipeline run):
+   - Pipeline reads `quick.jsonl` at 21:00
+   - GPT generates Portuguese sentence + English translation
+   - Cards added to Anki automatically
+
+6. **Review** (dashboard at 21:00):
+   - Open `~/Desktop/Portuguese-Dashboard.html`
+   - See new "Gym" category cards
+   - Review sentences in context
+
+### 💡 Pro Tips
+
+**For conversations**:
+- Ask permission before recording others
+- Use **Airplane Mode** to prevent interruptions during recording
+- Name recordings descriptively: "Gym Trainer - 2025-12-11"
+
+**For self-practice**:
+- Record yourself describing your day in Portuguese
+- Transcribe to see grammar/spelling mistakes
+- Extract words you struggled to say
+
+**For podcast/video content**:
+- Play Portuguese podcast on another device
+- Record with Voice Memos on iPhone
+- Transcribe to get written version
+- Extract unknown vocabulary
+
+### 🆚 Shortcut vs Voice Memos
+
+| Feature | "Save to AnkiInbox" Shortcut | Voice Memos Transcription |
+|---------|------------------------------|---------------------------|
+| **Best for** | Single words/short phrases | Longer conversations (2-5 min) |
+| **Input method** | Dictate or type one word | Record continuous speech |
+| **Immediate processing** | ✅ Goes straight to pipeline | ❌ Manual extraction needed |
+| **Context preservation** | ❌ No surrounding context | ✅ Full conversation saved |
+| **Review workflow** | Quick (single entry) | Slower (review transcript, identify words) |
+| **Accuracy** | High (short input) | Good (can have transcription errors) |
+| **Use case** | Daily vocabulary capture | Weekly deep dives, conversation analysis |
+
+**Recommendation**: Use **both**!
+- **Shortcut**: Day-to-day vocabulary as you encounter it
+- **Voice Memos**: Weekly conversation practice, longer content analysis
 
 ---
 
@@ -643,10 +998,20 @@ https://platform.openai.com/usage
 
 ## 🗒️ Changelog
 - **2025-12-11**
-  - Added **Audio Capture & Dashboard Add-On** with Voice Memos transcription support and auto-generated Apple Notes dashboard
-  - New script: `generate_dashboard.py` — Reads sayings.csv, classifies cards by topic (Gym, Dating, Work, Admin, Daily Life), and generates detailed overview in Apple Notes
-  - Dashboard updates automatically at 21:00 daily run
-  - Full documentation in DASHBOARD_SETUP.md and QUICK_START_DASHBOARD.md
+  - Added **Interactive HTML Dashboard** (`generate_dashboard_html.py`) — Beautiful browser-based learning overview
+    - Pulls data **directly from Anki** via AnkiConnect API (live, real-time data)
+    - Smart categorization into topics: 💪 Gym, ❤️ Dating, 💼 Work, 📋 Admin, 🏡 Daily Life, 🔍 Other
+    - Shows Portuguese & English words **with full example sentences**
+    - Live search functionality, expandable categories, auto-sorted by date
+    - Auto-generates at 21:00 daily run, manual refresh anytime
+    - Proper HTML entity escaping for Portuguese special characters (á, ã, ç, etc.)
+  - Added **Voice Memos Transcription workflow** for longer Portuguese conversations
+    - Comprehensive guide for using built-in iOS 17+/macOS 14+ Portuguese transcription
+    - Step-by-step instructions for iPhone, iPad, and Mac
+    - Best practices for recording, organizing, and extracting vocabulary
+    - Integration with existing "Save to AnkiInbox" Shortcut workflow
+  - Deprecated `generate_dashboard.py` (Apple Notes version) in favor of HTML dashboard
+  - Full documentation added to README for both Dashboard and Voice Memos features
 
 - **2025-12-07**
   - Changed `CLEAR_INBOX` to ON by default (`CLEAR_INBOX=1`) to prevent duplicate word processing on subsequent runs.
