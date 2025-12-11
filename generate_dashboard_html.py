@@ -204,10 +204,13 @@ def load_cards_from_anki(deck_name: str = "Portuguese Mastery (pt-PT)") -> List[
 def load_cards() -> List[Dict[str, str]]:
     """Load cards from Anki first, fallback to CSV if Anki unavailable."""
     try:
-        return load_cards_from_anki()
+        cards = load_cards_from_anki()
+        print(f"[anki] ✓ Successfully loaded {len(cards)} cards from Anki database")
+        return cards
     except Exception as e:
-        print(f"[anki] Could not load from Anki: {e}")
-        print("[anki] Falling back to CSV file...")
+        print(f"[anki] ✗ Could not connect to Anki: {e}")
+        print("[anki] ⚠ Falling back to CSV file (data may be outdated)...")
+        print("[anki] Tip: Open Anki first for real-time data!")
         return load_cards_from_csv()
 
 
@@ -246,7 +249,7 @@ def load_cards_from_csv() -> List[Dict[str, str]]:
 
 # ===== HTML GENERATION =====
 
-def generate_html_dashboard(cards: List[Dict[str, str]]) -> str:
+def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Anki") -> str:
     """Generate interactive HTML dashboard."""
     if not cards:
         return "<html><body><h1>No cards found</h1></body></html>"
@@ -435,17 +438,20 @@ def generate_html_dashboard(cards: List[Dict[str, str]]) -> str:
 
         .words-table th {{
             background: #f7fafc;
-            padding: 15px;
+            padding: 12px;
             text-align: left;
             font-weight: 600;
             color: #4a5568;
             border-bottom: 2px solid #e2e8f0;
+            font-size: 0.9em;
         }}
 
         .words-table td {{
-            padding: 15px;
+            padding: 12px;
             border-bottom: 1px solid #e2e8f0;
             vertical-align: top;
+            word-wrap: break-word;
+            max-width: 400px;
         }}
 
         .words-table tr:hover {{
@@ -508,6 +514,7 @@ def generate_html_dashboard(cards: List[Dict[str, str]]) -> str:
         <div class="header">
             <h1>🇵🇹 Portuguese Learning Dashboard</h1>
             <p class="subtitle">Last updated: {datetime.now().strftime('%A, %B %d, %Y at %H:%M')}</p>
+            <p class="subtitle" style="margin-top: 5px; font-size: 0.9em;">📊 Data source: <strong>{data_source}</strong></p>
         </div>
 
         <div class="stats-grid">
@@ -571,9 +578,9 @@ def generate_html_dashboard(cards: List[Dict[str, str]]) -> str:
                 <table class="words-table">
                     <thead>
                         <tr>
-                            <th style="width: 30%;">Portuguese Word & Sentence</th>
-                            <th style="width: 30%;">English Translation & Sentence</th>
-                            <th style="width: 12%;">Date Added</th>
+                            <th style="width: 40%;">Portuguese Word & Sentence</th>
+                            <th style="width: 45%;">English Translation & Sentence</th>
+                            <th style="width: 15%;">Date Added</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -668,17 +675,27 @@ def generate_html_dashboard(cards: List[Dict[str, str]]) -> str:
 
 def main() -> int:
     """Main entry point."""
-    print("[dashboard] Loading cards from sayings.csv...")
-    cards = load_cards()
+    print("[dashboard] Connecting to Anki for real-time data...")
+
+    # Try to load from Anki first
+    data_source = "Anki Database (Live)"
+    try:
+        cards = load_cards_from_anki()
+        print(f"[dashboard] ✓ Successfully loaded {len(cards)} cards from Anki")
+    except Exception as e:
+        print(f"[dashboard] ✗ Could not connect to Anki: {e}")
+        print("[dashboard] Falling back to CSV file...")
+        data_source = "CSV File (May be outdated)"
+        cards = load_cards_from_csv()
+        print(f"[dashboard] Loaded {len(cards)} cards from CSV")
 
     if not cards:
-        print("[dashboard] No cards found in sayings.csv")
+        print("[dashboard] No cards found")
         return 0
 
-    print(f"[dashboard] Loaded {len(cards)} cards")
     print("[dashboard] Generating HTML dashboard...")
 
-    html = generate_html_dashboard(cards)
+    html = generate_html_dashboard(cards, data_source)
 
     # Save to Desktop or iCloud
     output_path = Path.home() / "Desktop" / "Portuguese-Dashboard.html"
