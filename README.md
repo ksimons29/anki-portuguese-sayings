@@ -1,7 +1,9 @@
 # 🇵🇹 Anki Portuguese Automation — Unified README
-## Status [![Last commit](https://img.shields.io/github/last-commit/ksimons29/anki-portuguese-sayings?label=Last%20updated&branch=main)](https://github.com/ksimons29/anki-portuguese-sayings/commits/main) 
+## Status [![Last commit](https://img.shields.io/github/last-commit/ksimons29/anki-portuguese-sayings?label=Last%20updated&branch=main)](https://github.com/ksimons29/anki-portuguese-sayings/commits/main)
 
 A clean, end-to-end pipeline that turns quick notes on your **iPhone, iPad, or Mac** into high-quality **Anki** cards—automatically.
+
+> **NEW**: 🎙️ **Audio Capture & Dashboard Add-On** — Record longer Portuguese conversations with Voice Memos transcription, plus get an auto-generated learning overview in Apple Notes. See [QUICK_START_DASHBOARD.md](QUICK_START_DASHBOARD.md) for setup.
 
 - ✍️ **Capture** → use the Shortcut **Save to AnkiInbox** (prompts you to type or dictate a word in **Portuguese or English**).
 - 🧠 **Normalize to a lemma** → smart rules + stopwords pick the meaningful keyword (see “Stopwords & Lemma Extraction” below).
@@ -640,6 +642,12 @@ https://platform.openai.com/usage
 ---
 
 ## 🗒️ Changelog
+- **2025-12-11**
+  - Added **Audio Capture & Dashboard Add-On** with Voice Memos transcription support and auto-generated Apple Notes dashboard
+  - New script: `generate_dashboard.py` — Reads sayings.csv, classifies cards by topic (Gym, Dating, Work, Admin, Daily Life), and generates detailed overview in Apple Notes
+  - Dashboard updates automatically at 21:00 daily run
+  - Full documentation in DASHBOARD_SETUP.md and QUICK_START_DASHBOARD.md
+
 - **2025-12-07**
   - Changed `CLEAR_INBOX` to ON by default (`CLEAR_INBOX=1`) to prevent duplicate word processing on subsequent runs.
 
