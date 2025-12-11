@@ -704,21 +704,35 @@ def main() -> int:
 
     html = generate_html_dashboard(cards, data_source)
 
-    # Save to Desktop or iCloud
-    output_path = Path.home() / "Desktop" / "Portuguese-Dashboard.html"
+    # Save to iCloud Drive (syncs to iPhone/iPad)
+    output_path = BASE / "Portuguese-Dashboard.html"
+
+    # Also create a Desktop shortcut for easy Mac access
+    desktop_path = Path.home() / "Desktop" / "Portuguese-Dashboard.html"
 
     with output_path.open("w", encoding="utf-8") as f:
         f.write(html)
 
     print(f"[dashboard] ✓ Dashboard saved to: {output_path}")
 
-    # Auto-open in browser
+    # Copy to Desktop for convenient Mac access
+    try:
+        import shutil
+        shutil.copy2(output_path, desktop_path)
+        print(f"[dashboard] ✓ Copy saved to Desktop: {desktop_path}")
+    except Exception as e:
+        print(f"[dashboard] Note: Could not copy to Desktop: {e}")
+
+    # Auto-open in browser (Mac)
     try:
         subprocess.run(["open", str(output_path)], check=True)
         print("[dashboard] ✓ Dashboard opened in browser")
     except Exception as e:
         print(f"[dashboard] Could not auto-open: {e}")
         print(f"[dashboard] Manually open: {output_path}")
+
+    print(f"\n[dashboard] 📱 Access on iPhone/iPad:")
+    print(f"[dashboard]    Files app → iCloud Drive → Portuguese → Anki → Portuguese-Dashboard.html")
 
     return 0
 

@@ -74,8 +74,10 @@ The dashboard will:
 1. Open **Anki** automatically (if not already running)
 2. Pull **all cards** from your `Portuguese Mastery (pt-PT)` deck via AnkiConnect
 3. Classify cards into categories using bilingual keyword matching
-4. Generate a beautiful HTML file on your **Desktop**: `Portuguese-Dashboard.html`
-5. **Auto-open** in your default browser
+4. Generate a beautiful HTML file in **iCloud Drive**: `Portuguese/Anki/Portuguese-Dashboard.html`
+5. **Copy to Desktop** for easy Mac access
+6. **Auto-open** in your default browser
+7. **Auto-sync to iPhone/iPad** via iCloud Drive
 
 ### 📊 What You'll See
 
@@ -105,6 +107,31 @@ Preciso de aumentar a carga...      I need to increase the weight...
 fazer agachamentos                  do squats                         2025-12-10
 Vou fazer agachamentos hoje...      I'm going to do squats today...
 ```
+
+### 📱 Access on iPhone/iPad
+
+The dashboard automatically syncs to your iPhone and iPad via iCloud Drive!
+
+**On iPhone/iPad:**
+
+1. Open the **Files** app (built-in)
+2. Tap **Browse** (bottom right)
+3. Navigate to: **iCloud Drive** → **Portuguese** → **Anki**
+4. Tap **Portuguese-Dashboard.html**
+5. The dashboard opens in Safari with full functionality
+
+**Features work perfectly on mobile:**
+- ✅ Touch to expand/collapse categories
+- ✅ Search with on-screen keyboard
+- ✅ Swipe to scroll through cards
+- ✅ Responsive design adapts to phone/tablet screen
+- ✅ Stats cards stack vertically for readability
+
+**Pro tip**: Create a Safari bookmark for quick access:
+1. Open the dashboard in Safari
+2. Tap the **Share** button
+3. Choose **Add to Home Screen**
+4. Icon appears on your home screen like an app!
 
 ### 🎯 How It Works
 
@@ -137,7 +164,8 @@ cd ~/anki-tools && source .venv/bin/activate && python generate_dashboard_html.p
 | File | Purpose |
 |------|---------|
 | `~/anki-tools/generate_dashboard_html.py` | Main generator script (pulls from Anki, classifies, generates HTML) |
-| `~/Desktop/Portuguese-Dashboard.html` | Output file (open in any browser) |
+| `~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/Portuguese-Dashboard.html` | Primary output file (syncs to iPhone/iPad via iCloud) |
+| `~/Desktop/Portuguese-Dashboard.html` | Desktop copy for quick Mac access |
 | `~/anki-tools/generate_dashboard.py` | Legacy Apple Notes version (deprecated) |
 
 ### 🔧 Customization
@@ -155,10 +183,10 @@ TOPIC_KEYWORDS = {
 }
 ```
 
-**Change output location**: Edit line 702:
+**Change output location**: Edit line 708:
 ```python
-output_path = Path.home() / "Desktop" / "Portuguese-Dashboard.html"
-# Change to: Path.home() / "Documents" / "dashboard.html"
+output_path = BASE / "Portuguese-Dashboard.html"  # iCloud Drive (syncs to mobile)
+# To save elsewhere: Path.home() / "Documents" / "dashboard.html"
 ```
 
 ### ⚠️ Requirements
@@ -1005,6 +1033,8 @@ https://platform.openai.com/usage
     - Live search functionality, expandable categories, auto-sorted by date
     - Auto-generates at 21:00 daily run, manual refresh anytime
     - Proper HTML entity escaping for Portuguese special characters (á, ã, ç, etc.)
+    - **iPhone/iPad support**: Saves to iCloud Drive for automatic sync across all devices
+    - Mobile-responsive design with touch-friendly interface
   - Added **Voice Memos Transcription workflow** for longer Portuguese conversations
     - Comprehensive guide for using built-in iOS 17+/macOS 14+ Portuguese transcription
     - Step-by-step instructions for iPhone, iPad, and Mac
