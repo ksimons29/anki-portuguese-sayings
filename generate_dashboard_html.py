@@ -599,11 +599,12 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
             sentence_pt_safe = sentence_pt.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
             sentence_en_safe = sentence_en.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
-            # Prepare search data
+            # Prepare search data (escape for HTML attribute)
             search_text = f"{word_pt} {word_en} {sentence_pt} {sentence_en}".lower()
+            search_text_safe = search_text.replace('"', '&quot;').replace("'", '&#39;').replace("<", "&lt;").replace(">", "&gt;")
 
             html += f"""
-                        <tr class="word-row" data-search="{search_text}">
+                        <tr class="word-row" data-search="{search_text_safe}">
                             <td>
                                 <div class="word-pt">{word_pt_safe}</div>
                                 <div class="sentence-pt">{sentence_pt_safe}</div>
