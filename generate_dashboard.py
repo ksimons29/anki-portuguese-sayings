@@ -129,14 +129,30 @@ def classify_card(word_en: str, word_pt: str, sentence_en: str, sentence_pt: str
 def load_cards() -> List[Dict[str, str]]:
     """Load all cards from sayings.csv."""
     if not MASTER_CSV.exists() or MASTER_CSV.stat().st_size == 0:
+        print(f"[DEBUG] File doesn't exist or is empty: {MASTER_CSV}")
         return []
 
     cards = []
+    total_rows = 0
+    skipped_rows = 0
+
     with MASTER_CSV.open("r", encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
-        for row in reader:
+        print(f"[DEBUG] CSV headers: {reader.fieldnames}")
+
+        for i, row in enumerate(reader):
+            total_rows += 1
             if row.get("word_en"):  # Skip empty rows
                 cards.append(row)
+            else:
+                skipped_rows += 1
+                if i < 3:  # Show first few skipped rows
+                    print(f"[DEBUG] Skipped row {i}: {row}")
+
+    print(f"[DEBUG] Total rows read: {total_rows}")
+    print(f"[DEBUG] Rows with word_en: {len(cards)}")
+    print(f"[DEBUG] Skipped rows: {skipped_rows}")
+
     return cards
 
 
