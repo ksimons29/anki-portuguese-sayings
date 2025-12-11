@@ -244,6 +244,15 @@ if (( IS_DRY_RUN == 0 )); then
        -d '{"action":"sync","version":6}' >/dev/null 2>&1 || true
 fi
 
+# ---- Generate HTML Dashboard (only at 21:00 run) ----
+CURRENT_HOUR=$(date +%H)
+if (( IS_DRY_RUN == 0 )) && [[ "$CURRENT_HOUR" == "21" ]]; then
+  echo "[dashboard] Running HTML dashboard generation (21:00 daily update)..."
+  "$PY" "$HOME/anki-tools/generate_dashboard_html.py" || {
+    echo "[dashboard] WARN: Dashboard generation failed" >&2
+  }
+fi
+
 if (( CLEAR_INBOX == 1 )) && (( IS_DRY_RUN == 0 )); then
   ARCHIVE_DIR="$INBOX/archive"
   mkdir -p "$ARCHIVE_DIR"
