@@ -73,17 +73,7 @@ TOPIC_KEYWORDS = {
 
 def get_anki_base() -> Path:
     """Get Anki base directory from iCloud."""
-    mobile = (
-        Path.home()
-        / "Library"
-        / "Mobile Documents"
-        / "com~apple~CloudDocs"
-        / "Portuguese"
-        / "Anki"
-    )
-    if mobile.exists():
-        return mobile
-    # Fallback
+    # Check CloudStorage first (macOS Sonoma+)
     cloud = (
         Path.home()
         / "Library"
@@ -92,7 +82,19 @@ def get_anki_base() -> Path:
         / "Portuguese"
         / "Anki"
     )
-    return cloud
+    if cloud.exists():
+        return cloud
+
+    # Fallback to Mobile Documents (older macOS)
+    mobile = (
+        Path.home()
+        / "Library"
+        / "Mobile Documents"
+        / "com~apple~CloudDocs"
+        / "Portuguese"
+        / "Anki"
+    )
+    return mobile
 
 
 BASE = get_anki_base()
