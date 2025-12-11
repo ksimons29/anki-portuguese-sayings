@@ -224,7 +224,7 @@ def generate_dashboard(cards: List[Dict[str, str]]) -> str:
         )
 
         # Create clean table with all cards
-        lines.append("PORTUGUESE               ENGLISH                        DATE")
+        lines.append("Word (Portuguese)        Translation (English)          Added")
         lines.append("─" * 60)
 
         for card in sorted_cards:
@@ -329,14 +329,18 @@ end tell
 
 def main() -> int:
     """Main entry point."""
+    print(f"[dashboard] Looking for sayings.csv at: {MASTER_CSV}")
     print("[dashboard] Loading cards from sayings.csv...")
     cards = load_cards()
 
     if not cards:
         print("[dashboard] No cards found in sayings.csv")
+        print(f"[dashboard] File exists: {MASTER_CSV.exists()}")
+        if MASTER_CSV.exists():
+            print(f"[dashboard] File size: {MASTER_CSV.stat().st_size} bytes")
         return 0
 
-    print(f"[dashboard] Loaded {len(cards)} cards")
+    print(f"[dashboard] Loaded {len(cards)} cards from sayings.csv")
     print("[dashboard] Generating dashboard markdown...")
 
     markdown = generate_dashboard(cards)
