@@ -72,20 +72,8 @@ TOPIC_KEYWORDS = {
 # ===== PATHS =====
 
 def get_anki_base() -> Path:
-    """Get Anki base directory from iCloud."""
-    # Check CloudStorage first (macOS Sonoma+)
-    cloud = (
-        Path.home()
-        / "Library"
-        / "CloudStorage"
-        / "iCloud Drive"
-        / "Portuguese"
-        / "Anki"
-    )
-    if cloud.exists():
-        return cloud
-
-    # Fallback to Mobile Documents (older macOS)
+    """Get Anki base directory from iCloud - pick the path with the larger sayings.csv."""
+    # Both possible iCloud paths
     mobile = (
         Path.home()
         / "Library"
@@ -94,7 +82,35 @@ def get_anki_base() -> Path:
         / "Portuguese"
         / "Anki"
     )
-    return mobile
+    cloud = (
+        Path.home()
+        / "Library"
+        / "CloudStorage"
+        / "iCloud Drive"
+        / "Portuguese"
+        / "Anki"
+    )
+
+    # Check which has the larger sayings.csv file
+    mobile_csv = mobile / "sayings.csv"
+    cloud_csv = cloud / "sayings.csv"
+
+    mobile_size = mobile_csv.stat().st_size if mobile_csv.exists() else 0
+    cloud_size = cloud_csv.stat().st_size if cloud_csv.exists() else 0
+
+    print(f"[DEBUG] Mobile Documents CSV: {mobile_size} bytes")
+    print(f"[DEBUG] CloudStorage CSV: {cloud_size} bytes")
+
+    # Return path with larger file (has more data)
+    if mobile_size > cloud_size:
+        print(f"[DEBUG] Using Mobile Documents (larger file)")
+        return mobile
+    elif cloud_size > 0:
+        print(f"[DEBUG] Using CloudStorage")
+        return cloud
+    else:
+        print(f"[DEBUG] Defaulting to Mobile Documents")
+        return mobile
 
 
 BASE = get_anki_base()
