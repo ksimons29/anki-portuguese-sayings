@@ -1,0 +1,97 @@
+Portuguese transcription automation (OpenAI Whisper + Keychain + one command)
+
+Goal
+
+Transcribe Portuguese audio recordings into text automatically.
+
+Input is audio files you drop into an iCloud folder. Output is a text transcript saved into a Transcripts folder. After transcription the audio file is moved to Archive.
+
+Folder setup (iCloud Drive)
+
+Base folder
+/Users/koossimons/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Transcrições
+
+Recommended structure
+	•	Transcrições (inbox for new audio files)
+	•	Transcrições/Transcripts (output transcripts)
+	•	Transcrições/Archive (processed audio files)
+
+Keychain setup (same pattern as the Anki tools)
+
+Store your OpenAI API key in macOS Keychain under this service name
+anki-tools-openai
+
+Add or update the key
+
+security add-generic-password -a "$USER" -s "anki-tools-openai" -w "PASTE_OPENAI_API_KEY_HERE" -U
+
+Sanity check (prints only first 8 characters)
+
+security find-generic-password -a "$USER" -s "anki-tools-openai" -w | head -c 8 ; echo
+
+Script
+
+Location
+~/anki-tools/transcribe_folder_pt.py
+
+Run once manually (transcribe new files)
+
+cd ~/anki-tools
+source .venv/bin/activate
+python3 transcribe_folder_pt.py "/Users/koossimons/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Transcrições" --out-subdir "Transcripts" --move-to "Archive" --skip-existing
+
+One command launcher (recommended)
+
+Create a launcher command pttranscribe so you can run it from anywhere.
+
+Create the launcher
+
+mkdir -p ~/bin
+
+cat > ~/bin/pttranscribe <<'SH'
+#!/bin/bash
+set -euo pipefail
+
+source "$HOME/anki-tools/.venv/bin/activate"
+
+python3 "$HOME/anki-tools/transcribe_folder_pt.py" \
+  "/Users/koossimons/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Transcrições" \
+  --out-subdir "Transcripts" \
+  --move-to "Archive" \
+  --skip-existing
+SH
+
+chmod +x ~/bin/pttranscribe
+
+Add ~/bin to PATH (zsh)
+
+echo 'export PATH="$HOME/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+
+Run anytime
+
+pttranscribe
+
+macOS Shortcut (one click)
+
+This runs the launcher from the Shortcuts app.
+
+Steps
+1 Open Shortcuts on Mac
+2 New Shortcut
+3 Add action Run Shell Script
+4 Script
+
+"$HOME/bin/pttranscribe"
+
+Notes
+	•	This Shortcut runs on Mac only
+	•	On iPhone you cannot run Run Shell Script directly. You can run it remotely via SSH to your Mac if needed
+
+How to tell if there is new audio to process
+
+This lists audio files waiting in the inbox folder
+
+ls -1 "/Users/koossimons/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Transcrições" | egrep -i '\.(m4a|mp3|wav|aac|mp4|flac|aiff|caf)$' || echo "No new audio in inbox"
+
+If you see only audio files in Archive, that means they were already processed.
