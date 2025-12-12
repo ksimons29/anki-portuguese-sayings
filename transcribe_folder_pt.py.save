@@ -1,0 +1,143 @@
+#!/usr/bin/env python3  # Uses the Python 3 interpreter.  
+from __future__ import annotations  # Enables modern type hints in older Python versions.  
+
+import argparse  # Reads command line arguments like folder path.  
+import os  # Provides environment and path helpers.  
+import re  # Helps clean filenames for safe output names.  
+import subprocess  # Runs macOS commands like `security` and `osascript`.  
+from pathlib import Path  # Makes file paths safer and easier to manipulate.  
+from typing import Optional  # Lets us express Optional[str] types.  
+
+from openai import OpenAI  # OpenAI official Python SDK client.  
+
+
+KEYCHAIN_SERVICE_API_KEY = "anki-tools-openai"  # Must match your README Keychain service name.  
+KEYCHAIN_SERVICE_PROJECT = "anki-tools-openai-project"  # Must match your README project id Keychain service name.  
+
+DEFAULT_MODEL = "gpt-4o-mini-transcribe"  # Cheapest recommended transcription model in the OpenAI docs pricing table.  
+DEFAULT_LANGUAGE = "pt"  # Forces Portuguese transcription instead of accidental translation.  
+
+AUDIO_EXTS = {".m4a", ".mp3", ".wav", ".aac", ".mp4", ".mpeg", ".mpga", ".webm", ".aiff", ".flac", ".caf"}  # Common audio types.  
+
+
+def run_cmd(cmd: list[str]) -> str:  # Defines a helper that runs a shell command and returns stdout.  
+    result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)  # Executes safely.  
+    return result.stdout.strip()  # Removes trailing newlines and spaces.  
+
+
+def read_keychain_secret(service_name: str) -> Optional[str]:  # Reads a secret from macOS Keychain by service name.  
+    try:  # Tries to read the secret.  
+        secret = run_cmd(["security", "find-generic-password", "-a", os.environ.get("USER", ""), "-s", service_name, "-w"])  # Reads value only.  
+        return secret if secret else None  # Returns secret or None if empty.  
+    except subprocess.CalledProcessError:  # Happens if the entry does not exist.  
+        return None  # Return None so caller can decide what to do.  
+
+
+def safe_stem(name: str) -> str:  # Converts a filename into a safe output stem.  
+    stem = re.sub(r"\s+", " ", name).strip()  # Normalizes whitespace.  
+    stem = re.sub(r"[^\w\s\(\)\[\]\.]", "_", stem)  # Replaces weird characters with underscores.  
+    stem = stem.replace(" ", "_")  # Uses underscores to avoid space issues in filenames.  
+    return stem[:120] if len(stem) > 120 else stem  # Keeps names reasonably short.  
+
+
+def ensure_output_dir(base_folder: Path) -> Path:  # Creates the output folder for transcripts.  
+    out_dir = base_folder / "transcripts_txt"  # Puts transcripts in a predictable subfolder.  
+    out_dir.mkdir(parents=True, exist_ok=True)  # Creates it if missing.  
+    return out_dir  # Returns the directory path.  
+
+
+def transcribe_one_file(client: OpenAI, audio_path: Path, model: str, language: str) -> str:  # Transcribes one audio file and returns text.  
+    with audio_path.open("rb") as f:  # Opens the audio file in binary mode for upload.  
+        tx = client.audio.transcriptions.create(  # Calls OpenAI Audio transcriptions endpoint.  
+            model=model,  # Chooses the transcription model.  
+            file=f,  # Sends the audio file.  
+            language=language,  # Forces Portuguese.  
+            response_format="text",  # Returns plain text.  
+        )  # Ends the API call.  
+    return str(tx).strip()  # Returns the transcript text.  
+
+
+def create_note_in_apple_notes(note_title: str, note_body: str, notes_folder: str) -> None:  # Creates a note in Apple Notes via AppleScript.  
+    applescript = f'''  # Starts the AppleScript string.  
+tell application "Notes"  # Targets the Notes app.  
+    if not (exists folder "{notes_folder}") then  # Checks if the folder exists.  
+        make new folder with properties {{name:"{notes_folder}"}}  # Creates the folder if missing.  
+    end if  # Ends the folder existence check.  
+    set theFolder to folder "{notes_folder}"  # Gets a handle to the folder.  
+    make new note at theFolder with properties {{name:"{note_title}", body:"{note_body}"}}  # Creates the note.  
+end tell  # Ends the Notes app block.  
+'''  # Ends the AppleScript string.  
+    subprocess.run(["osascript", "-e", applescript], check=True)  # Executes AppleScript.  
+
+
+def main() -> int:  # Main program entry point returning an exit code.  
+    parser = argparse.ArgumentParser(description="Transcribe all audio files in a folder to Portuguese text using OpenAI and macOS Keychain.")  # CLI help.  
+    parser.add_argument("folder", type=str, help="Folder containing audio files to transcribe.")  # Folder path argument.  
+    parser.add_argument("--model", type=str, default=DEFAULT_MODEL, help=f"Model to use (default: {DEFAULT_MODEL}).")  # Model option.  
+    parser.add_argument("--language", type=str, default=DEFAULT_LANGUAGE, help="Language code to force (default: pt).")  # Language option.  
+    parser.add_argument("--notes-folder", type=str, default="", help="If set, also create an Apple Notes note per transcript in this Notes folder.")  # Notes option.  
+    args = parser.parse_args()  # Parses CLI arguments.  
+
+    base = Path(args.folder).expanduser()  # Converts input string to a Path.  
+    if not base.exists():  # Validates folder exists.  
+        print(f"Folder not found: {base}")  # Prints a useful error.  
+        return 2  # Nonzero exit code.  
+
+    api_key = read_keychain_secret(KEYCHAIN_SERVICE_API_KEY)  # Reads your API key from Keychain.  
+    if not api_key:  # If API key is missing.  
+        print(f"Missing Keychain item for API key: {KEYCHAIN_SERVICE_API_KEY}")  # Tells you exactly what is missing.  
+        print("Fix with: security add-generic-password -a \"$USER\" -s \"anki-tools-openai\" -w 'sk-...' -U")  # Prints the fix command.  
+        return 3  # Nonzero exit code.  
+
+    project_id = read_keychain_secret(KEYCHAIN_SERVICE_PROJECT)  # Reads your project id from Keychain (optional).  
+
+    default_headers = {}  # Prepares optional headers.  
+    if project_id:  # If a project id exists.  
+        default_headers["OpenAI-Project"] = project_id  # Adds the OpenAI Project header.  
+
+    client = OpenAI(api_key=api_key, default_headers=default_headers if default_headers else None)  # Creates OpenAI client.  
+
+    out_dir = ensure_output_dir(base)  # Creates output directory for transcripts.  
+
+    audio_files = []  # Collects matching audio files.  
+    for p in sorted(base.iterdir()):  # Iterates over direct children of the folder.  
+        if p.is_file() and p.suffix.lower() in AUDIO_EXTS:  # Filters to audio files only.  
+            audio_files.append(p)  # Adds to list.  
+
+    if not audio_files:  # If nothing found.  
+        print("No audio files found in folder.")  # Prints status.  
+        return 0  # Not an error.  
+
+    for audio_path in audio_files:  # Loops through each audio file.  
+        out_name = safe_stem(audio_path.stem) + ".txt"  # Builds an output filename.  
+        out_path = out_dir / out_name  # Places it inside transcripts_txt.  
+
+        if out_path.exists() and out_path.stat().st_size > 20:  # Skips if transcript already exists and looks nonempty.  
+            print(f"Skip existing: {out_path.name}")  # Prints skip info.  
+            continue  # Moves to next file.  
+
+        print(f"Transcribing: {audio_path.name}")  # Prints progress.  
+        try:  # Starts error handling for this file.  
+            text = transcribe_one_file(client, audio_path, args.model, args.language)  # Calls OpenAI transcription.  
+        except Exception as e:  # Catches API or file errors.  
+            print(f"Failed: {audio_path.name}  Error: {e}")  # Prints failure reason.  
+            continue  # Moves to next file.  
+
+        out_path.write_text(text + "\n", encoding="utf-8")  # Writes transcript as UTF 8 text.  
+        print(f"Wrote: {out_path}")  # Confirms output path.  
+
+        if args.notes_folder:  # If user asked to also write into Apple Notes.  
+            note_title = f"Transcript  {audio_path.stem}"  # Builds a note title.  
+            note_body = f"<pre>{text}</pre>"  # Wraps in pre so it stays readable in Notes.  
+            try:  # Attempts Notes creation.  
+                create_note_in_apple_notes(note_title, note_body, args.notes_folder)  # Creates note via AppleScript.  
+                print(f"Notes saved: {note_title}")  # Confirms note creation.  
+            except Exception as e:  # Catches AppleScript errors.  
+                print(f"Notes failed: {note_title}  Error: {e}")  # Prints error.  
+
+    print("Done.")  # Final status.  
+    return 0  # Success exit code.  
+
+
+if __name__ == "__main__":  # Standard Python entry point check.  
+    raise SystemExit(main())  # Runs main and exits with its code.  
