@@ -219,8 +219,16 @@ fi
 # Bail clearly when there's nothing to do
 if [[ ! -s "$SCRATCH" ]]; then
   echo "[inbox] scratch is empty; nothing to process."
+  if (( CLEAR_INBOX == 1 )) && [[ -s "$QUICK" ]]; then
+    echo "[inbox] NOTICE: Original inbox has content but scratch is empty."
+    echo "[inbox] This suggests a copy issue. Please check file permissions."
+  fi
   exit 0
 fi
+
+# Show what we're processing
+ENTRY_COUNT=$(grep -c '{' "$SCRATCH" || echo 0)
+echo "[inbox] Processing $ENTRY_COUNT JSON entries from inbox"
 
 # ---- Run transformer ----
 PY="$HOME/anki-tools/.venv/bin/python"
@@ -236,7 +244,19 @@ declare -a PY_ARGS=(
 if (( IS_DRY_RUN == 1 )); then
   PY_ARGS+=(--dry-run 1)
 fi
+
+# ---- Run transformer (capture exit code) ----
+set +e
 "$PY" -u "$HOME/anki-tools/transform_inbox_to_csv.py" "${PY_ARGS[@]}"
+STATUS=$?
+set -e
+
+if [[ $STATUS -ne 0 ]]; then
+  echo "[ERROR] Transform script failed with exit code $STATUS" >&2
+  exit $STATUS
+fi
+
+echo "[transform] Completed successfully (status=$STATUS)"
 
 # ---- Sync Anki (optional but nice) ----
 if (( IS_DRY_RUN == 0 )); then
@@ -253,20 +273,31 @@ if (( IS_DRY_RUN == 0 )) && [[ "$CURRENT_HOUR" == "21" ]]; then
   }
 fi
 
+# ---- Clear inbox after successful processing ----
 if (( CLEAR_INBOX == 1 )) && (( IS_DRY_RUN == 0 )); then
+  echo "[inbox] Clearing inbox after successful run..."
   ARCHIVE_DIR="$INBOX/archive"
   mkdir -p "$ARCHIVE_DIR"
   if [[ -f "$QUICK" ]]; then
     STAMP="$(date +%F_%H%M%S)"
     ARCHIVE_PATH="$ARCHIVE_DIR/quick.$STAMP.jsonl"
+    BEFORE_SIZE=$(wc -l < "$QUICK" | tr -d ' ')
     if cp -p "$QUICK" "$ARCHIVE_PATH" 2>/dev/null; then
       : > "$QUICK"
-      echo "[inbox] Archived quick.jsonl to $ARCHIVE_PATH and cleared original."
+      echo "[inbox] ✓ Archived $BEFORE_SIZE lines to $(basename "$ARCHIVE_PATH")"
+      echo "[inbox] ✓ Cleared $QUICK (now empty)"
     else
       echo "[inbox] WARN: could not archive $QUICK; leaving file untouched." >&2
+      echo "[inbox] Check file permissions on $INBOX" >&2
     fi
   else
     echo "[inbox] WARN: quick file missing; nothing to clear." >&2
+  fi
+else
+  if (( IS_DRY_RUN == 1 )); then
+    echo "[inbox] DRY-RUN: Would clear inbox after successful production run"
+  elif (( CLEAR_INBOX == 0 )); then
+    echo "[inbox] CLEAR_INBOX=0: Inbox will NOT be cleared (keeping entries)"
   fi
 fi
 
