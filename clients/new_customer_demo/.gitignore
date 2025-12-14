@@ -1,0 +1,5 @@
+anki_base/sayings.csv
+anki_base/last_import.csv
+anki_base/logs/pipeline.*
+anki_base/logs/tokens_*.csv
+anki_base/inbox/.rotated-*

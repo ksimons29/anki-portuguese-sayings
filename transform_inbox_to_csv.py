@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Transform iCloud inbox quick.jsonl -> sayings.csv and push to Anki via AnkiConnect.
+Transform iCloud inbox quick.jsonl -> Google Sheets (or CSV) and push to Anki via AnkiConnect.
 
 - Reads /Portuguese/Anki/inbox/quick.jsonl
 - Normalizes each entry to a target lemma/short phrase (e.g., "I have to print this page." -> "print")
 - Asks LLM for pt-PT translation + example sentence
-- Appends to sayings.csv, writes last_import.csv snapshot, adds to Anki
+- Appends to Google Sheets (primary) or sayings.csv (fallback), writes last_import.csv snapshot, adds to Anki
 - UTF-8 safe logging; continues past per-item errors
+
+Storage backends:
+- Google Sheets (default): Set GOOGLE_SHEETS_CREDENTIALS env var or use --use-csv to disable
+- CSV fallback: Use --use-csv flag or set USE_CSV=1
 
 Note: Dynamic image fetching/uploading has been removed. Card visuals are now handled
 statically in the Anki note template (e.g., a fixed logo/brand image).
@@ -34,6 +38,15 @@ from typing import Dict, List, Optional, Tuple
 
 # local
 from _openai_compat import chat as _compat_chat
+
+# Google Sheets integration (optional)
+_google_sheets_available = False
+_google_sheets_storage = None
+try:
+    import google_sheets
+    _google_sheets_available = google_sheets.is_available()
+except ImportError:
+    pass
 
 # ===== PATHS / DEFAULTS =====
 # Force Mobile Documents path; honor ANKI_BASE env; fallback to CloudStorage
@@ -418,49 +431,128 @@ def ensure_header(csv_path: Path) -> None:
             )
 
 
+def _detect_csv_format(csv_path: Path) -> Tuple[bool, str]:
+    """
+    Detect CSV format by checking first line.
+    Returns (has_header, format_type) where format_type is:
+      - 'new': word_en, word_pt, sentence_pt, sentence_en, date_added
+      - 'old': date_added, word_pt, word_en, sentence_pt, sentence_en
+    """
+    if not csv_path.exists() or csv_path.stat().st_size == 0:
+        return (False, 'new')
+
+    with csv_path.open("r", encoding="utf-8", newline="") as f:
+        first_line = f.readline().strip()
+
+    if not first_line:
+        return (False, 'new')
+
+    # Check for header
+    if "word_en" in first_line.lower():
+        return (True, 'new')
+
+    # No header - check if first field is a date (old format)
+    first_field = first_line.split(',')[0].strip()
+    if re.match(r'^\d{4}-\d{2}-\d{2}$', first_field):
+        return (False, 'old')
+
+    return (False, 'new')
+
+
 def load_existing_words(csv_path: Path) -> set:
+    """
+    Load existing word_en values from CSV for deduplication.
+    Handles both old format (date_added first) and new format (word_en first).
+    """
     seen = set()
-    if csv_path.exists() and csv_path.stat().st_size > 0:
-        with csv_path.open("r", encoding="utf-8", newline="") as f:
-            r = csv.reader(f)
-            header = True
-            for row in r:
-                if not row:
-                    continue
-                if header and row[:1] == ["word_en"]:
-                    header = False
-                    continue
-                seen.add(row[0].strip().lower())
+    if not csv_path.exists() or csv_path.stat().st_size == 0:
+        return seen
+
+    has_header, fmt = _detect_csv_format(csv_path)
+
+    # Determine which column contains word_en
+    word_en_col = 0 if fmt == 'new' else 2
+
+    with csv_path.open("r", encoding="utf-8", newline="") as f:
+        r = csv.reader(f)
+        first_row = True
+        for row in r:
+            if not row:
+                continue
+            if first_row:
+                first_row = False
+                if has_header:
+                    continue  # Skip header row
+            if len(row) > word_en_col:
+                word = row[word_en_col].strip().lower()
+                if word:
+                    seen.add(word)
     return seen
 
 
 def load_existing_sentence_pairs(csv_path: Path) -> set:
     """
     Return a set of (word_en, sentence_pt, sentence_en) keys to detect exact duplicates.
+    Handles both old format (date_added first) and new format (word_en first).
     """
     pairs = set()
-    if csv_path.exists() and csv_path.stat().st_size > 0:
-        with csv_path.open("r", encoding="utf-8", newline="") as f:
-            r = csv.reader(f)
-            header = True
-            for row in r:
-                if not row:
-                    continue
-                if header and row[:1] == ["word_en"]:
-                    header = False
-                    continue
-                if len(row) < 4:
-                    continue
-                pairs.add(_sentence_duplicate_key(row[0], row[2], row[3]))
+    if not csv_path.exists() or csv_path.stat().st_size == 0:
+        return pairs
+
+    has_header, fmt = _detect_csv_format(csv_path)
+
+    # Column indices based on format
+    if fmt == 'new':
+        # word_en, word_pt, sentence_pt, sentence_en, date_added
+        word_en_col, sentence_pt_col, sentence_en_col = 0, 2, 3
+    else:
+        # date_added, word_pt, word_en, sentence_pt, sentence_en
+        word_en_col, sentence_pt_col, sentence_en_col = 2, 3, 4
+
+    with csv_path.open("r", encoding="utf-8", newline="") as f:
+        r = csv.reader(f)
+        first_row = True
+        for row in r:
+            if not row:
+                continue
+            if first_row:
+                first_row = False
+                if has_header:
+                    continue  # Skip header row
+            if len(row) <= max(word_en_col, sentence_pt_col, sentence_en_col):
+                continue
+            pairs.add(_sentence_duplicate_key(
+                row[word_en_col],
+                row[sentence_pt_col],
+                row[sentence_en_col]
+            ))
     return pairs
 
 
 def append_rows(csv_path: Path, rows: List[List[str]]) -> None:
-    ensure_header(csv_path)
-    with csv_path.open("a", encoding="utf-8", newline="") as f:
-        w = csv.writer(f)
-        for row in rows:
-            w.writerow(row)
+    """
+    Append rows to CSV. Rows come in as [word_en, word_pt, sentence_pt, sentence_en, date_added].
+    If the existing file uses old format, convert to match.
+    """
+    if not csv_path.exists() or csv_path.stat().st_size == 0:
+        # New file - use new format with header
+        ensure_header(csv_path)
+        with csv_path.open("a", encoding="utf-8", newline="") as f:
+            w = csv.writer(f)
+            for row in rows:
+                w.writerow(row)
+    else:
+        has_header, fmt = _detect_csv_format(csv_path)
+        with csv_path.open("a", encoding="utf-8", newline="") as f:
+            w = csv.writer(f)
+            for row in rows:
+                if fmt == 'old':
+                    # Convert from [word_en, word_pt, sentence_pt, sentence_en, date_added]
+                    # to [date_added, word_pt, word_en, sentence_pt, sentence_en]
+                    word_en, word_pt, sentence_pt, sentence_en, date_added = row
+                    w.writerow([date_added, word_pt, word_en, sentence_pt, sentence_en])
+                else:
+                    w.writerow(row)
 
 
 # ===== ANKICONNECT =====
@@ -760,6 +852,17 @@ def main(argv: Optional[List[str]] = None) -> int:
         choices=list(_LOG_LEVEL_RANK.keys()),
         help="Logging verbosity for stdout (default: INFO).",
     )
+    ap.add_argument(
+        "--use-csv",
+        action="store_true",
+        default=False,
+        help="Force using local CSV file instead of Google Sheets.",
+    )
+    ap.add_argument(
+        "--spreadsheet-id",
+        default=None,
+        help="Google Sheets spreadsheet ID (default: from google_sheets module).",
+    )
     args = ap.parse_args(argv)
 
     try:
@@ -768,6 +871,28 @@ def main(argv: Optional[List[str]] = None) -> int:
         ap.error(str(exc))
 
     _set_log_level(args.log_level)
+
+    # Determine storage backend
+    use_csv = args.use_csv or os.environ.get("USE_CSV", "").lower() in ("1", "true", "yes")
+    use_google_sheets = False
+    gsheets_storage = None
+
+    if not use_csv and _google_sheets_available:
+        try:
+            spreadsheet_id = args.spreadsheet_id or google_sheets.SPREADSHEET_ID
+            gsheets_storage = google_sheets.GoogleSheetsStorage(spreadsheet_id=spreadsheet_id)
+            # Test connection
+            _ = gsheets_storage.get_all_rows(use_cache=False)
+            use_google_sheets = True
+            _log("INFO", f"[storage] Using Google Sheets (ID: {spreadsheet_id})")
+        except Exception as e:
+            _safe_printerr(f"[WARN] Google Sheets unavailable: {e}")
+            _log("INFO", "[storage] Falling back to CSV")
+    else:
+        if use_csv:
+            _log("INFO", "[storage] Using CSV (--use-csv flag)")
+        else:
+            _log("INFO", "[storage] Using CSV (Google Sheets not configured)")
 
     master_csv = Path(args.out).expanduser() if args.out else MASTER_CSV
     last_import = (
@@ -817,8 +942,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         _log("INFO", "[INFO] Nothing left after normalization.")
         return 0
 
-    # Dedupe against CSV + within this batch
-    existing_words = load_existing_words(master_csv)
+    # Dedupe against storage + within this batch
+    if use_google_sheets:
+        existing_words = gsheets_storage.load_existing_words()
+        _log("INFO", f"[dedup] Loaded {len(existing_words)} existing words from Google Sheets")
+    else:
+        existing_words = load_existing_words(master_csv)
+        _log("INFO", f"[dedup] Loaded {len(existing_words)} existing words from CSV")
     seen, todo = set(), []
     for lemma, rule, original in normalized:
         k = lemma.strip().lower()
@@ -888,7 +1018,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 1
 
     if new_rows:
-        existing_pairs = load_existing_sentence_pairs(master_csv)
+        if use_google_sheets:
+            existing_pairs = gsheets_storage.load_existing_sentence_pairs()
+        else:
+            existing_pairs = load_existing_sentence_pairs(master_csv)
         seen_pairs = set(existing_pairs)
         filtered_rows: List[List[str]] = []
         skipped_duplicates = 0
@@ -946,17 +1079,24 @@ def main(argv: Optional[List[str]] = None) -> int:
             _safe_printerr(f"[WARN] Could not write usage log: {e}")
 
         try:
-            append_rows(master_csv, new_rows)
+            if use_google_sheets:
+                count = gsheets_storage.append_rows(new_rows)
+                _log("INFO", f"[INFO] Appended {count} row(s) to Google Sheets")
+            else:
+                append_rows(master_csv, new_rows)
+                _log("INFO", f"[INFO] Appended {len(new_rows)} row(s) to {master_csv}")
+
+            # Always write local snapshot for reference
             with last_import.open("w", encoding="utf-8", newline="") as f:
                 w = csv.writer(f)
                 w.writerow(
                     ["word_en", "word_pt", "sentence_pt", "sentence_en", "date_added"]
                 )
                 w.writerows(new_rows)
-            _log("INFO", f"[INFO] Appended {len(new_rows)} row(s) to {master_csv}")
             _log("INFO", f"[INFO] Snapshot written to {last_import}")
         except Exception as e:
-            _safe_printerr(f"ERROR: Writing CSV failed: {e}")
+            storage_name = "Google Sheets" if use_google_sheets else "CSV"
+            _safe_printerr(f"ERROR: Writing to {storage_name} failed: {e}")
             return 1
 
         try:

@@ -8,15 +8,28 @@ Creates a beautiful, clickable dashboard showing:
 - Categories with top words (collapsible to show all)
 - Recent activity
 - Search functionality
+
+Data sources (in priority order):
+1. Anki (live via AnkiConnect)
+2. Google Sheets
+3. CSV file (fallback)
 """
 from collections import defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Tuple
 import csv
 import os
 import subprocess
 import sys
+
+# Google Sheets integration (optional)
+_google_sheets_available = False
+try:
+    import google_sheets
+    _google_sheets_available = google_sheets.is_available()
+except ImportError:
+    pass
 
 # ===== CONFIGURATION =====
 
@@ -201,17 +214,51 @@ def load_cards_from_anki(deck_name: str = "Portuguese Mastery (pt-PT)") -> List[
     return cards
 
 
-def load_cards() -> List[Dict[str, str]]:
-    """Load cards from Anki first, fallback to CSV if Anki unavailable."""
+def load_cards_from_google_sheets() -> List[Dict[str, str]]:
+    """Load all cards from Google Sheets."""
+    if not _google_sheets_available:
+        raise RuntimeError("Google Sheets not available")
+
+    print("[gsheets] Connecting to Google Sheets...")
+    storage = google_sheets.GoogleSheetsStorage()
+    cards = storage.get_all_rows(use_cache=False)
+    print(f"[gsheets] Loaded {len(cards)} cards from Google Sheets")
+    return cards
+
+
+def load_cards() -> Tuple[List[Dict[str, str]], str]:
+    """
+    Load cards from best available source.
+
+    Priority:
+    1. Anki (live data)
+    2. Google Sheets
+    3. CSV file (fallback)
+
+    Returns: (cards, data_source_name)
+    """
+    # Try Anki first
     try:
         cards = load_cards_from_anki()
         print(f"[anki] ✓ Successfully loaded {len(cards)} cards from Anki database")
-        return cards
+        return cards, "Anki Database (Live)"
     except Exception as e:
         print(f"[anki] ✗ Could not connect to Anki: {e}")
-        print("[anki] ⚠ Falling back to CSV file (data may be outdated)...")
-        print("[anki] Tip: Open Anki first for real-time data!")
-        return load_cards_from_csv()
+
+    # Try Google Sheets second
+    if _google_sheets_available:
+        try:
+            cards = load_cards_from_google_sheets()
+            print(f"[gsheets] ✓ Successfully loaded {len(cards)} cards from Google Sheets")
+            return cards, "Google Sheets"
+        except Exception as e:
+            print(f"[gsheets] ✗ Could not connect to Google Sheets: {e}")
+
+    # Fallback to CSV
+    print("[csv] Falling back to CSV file...")
+    cards = load_cards_from_csv()
+    print(f"[csv] Loaded {len(cards)} cards from CSV")
+    return cards, "CSV File (May be outdated)"
 
 
 def load_cards_from_csv() -> List[Dict[str, str]]:
@@ -682,19 +729,10 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
 
 def main() -> int:
     """Main entry point."""
-    print("[dashboard] Connecting to Anki for real-time data...")
+    print("[dashboard] Loading vocabulary data...")
 
-    # Try to load from Anki first
-    data_source = "Anki Database (Live)"
-    try:
-        cards = load_cards_from_anki()
-        print(f"[dashboard] ✓ Successfully loaded {len(cards)} cards from Anki")
-    except Exception as e:
-        print(f"[dashboard] ✗ Could not connect to Anki: {e}")
-        print("[dashboard] Falling back to CSV file...")
-        data_source = "CSV File (May be outdated)"
-        cards = load_cards_from_csv()
-        print(f"[dashboard] Loaded {len(cards)} cards from CSV")
+    # Use the unified load_cards function
+    cards, data_source = load_cards()
 
     if not cards:
         print("[dashboard] No cards found")
