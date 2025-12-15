@@ -342,4 +342,7 @@ if __name__ == "__main__":
 
     except Exception as e:
         print(f"ERROR: {e}")
+        import traceback
+        print("\nFull error details:")
+        traceback.print_exc()
         exit(1)
