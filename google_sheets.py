@@ -31,7 +31,7 @@ from typing import Dict, List, Optional, Set, Tuple
 from datetime import datetime
 
 # Google Sheets constants
-SPREADSHEET_ID = "PASTE_SPREADSHEET_ID_HERE"
+SPREADSHEET_ID = "1q20cEuHXoaLNWJ06i1Nv9Eo2JkJ00LMmPboTYSGz1xg"
 SHEET_NAME = "Sheet1"  # Default sheet name, can be overridden
 
 # Column mapping (0-indexed for internal use)
