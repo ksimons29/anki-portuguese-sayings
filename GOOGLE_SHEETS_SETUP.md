@@ -46,13 +46,24 @@ mv ~/Downloads/your-project-xxxxx.json ~/.config/anki-tools/credentials.json
 
 ## Step 6: Share Your Spreadsheet
 
-1. Open your Google Spreadsheet: https://docs.google.com/spreadsheets/d/1q20cEuHXoaLNWJ06i1Nv9Eo2JkJ00LMmPboTYSGz1xg/edit
+1. Open your Google Spreadsheet (replace with your own spreadsheet ID)
 2. Click "Share" button
 3. Add the service account email (found in the JSON file as `client_email`, looks like: `service-account-name@project-id.iam.gserviceaccount.com`)
 4. Give it "Editor" access
 5. Click "Share"
 
 ## Step 7: Test the Connection
+
+### Option A: Quick test with curl (API key method)
+
+```bash
+SHEET_ID="PASTE_SPREADSHEET_ID_HERE"
+RANGE="Sheet1!A1:D20"
+
+curl -s "https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${RANGE}?key=${GOOGLE_API_KEY}" | python3 -m json.tool
+```
+
+### Option B: Test with Python (service account method)
 
 ```bash
 python3 google_sheets.py
@@ -99,4 +110,4 @@ export USE_CSV=1
 
 ### "Spreadsheet not found"
 - Verify the spreadsheet ID is correct in `google_sheets.py`
-- Current ID: `1q20cEuHXoaLNWJ06i1Nv9Eo2JkJ00LMmPboTYSGz1xg`
+- Update the `SPREADSHEET_ID` constant with your own spreadsheet ID
