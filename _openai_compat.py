@@ -31,29 +31,16 @@ def chat(model: str, messages, temperature=0.2, top_p=0.95, max_tokens=300):
     if not base.endswith("/v1"):
         base += "/v1"
 
-    # Project keys typically require the Responses API
-    use_responses = api_key.startswith("sk-proj-") or os.getenv("FORCE_RESPONSES_API") == "1"
-
-    if use_responses:
-        url = f"{base}/responses"
-        # Flatten chat messages to a single prompt string
-        prompt = "\n\n".join(f"{m.get('role','user').upper()}: {m.get('content','')}" for m in messages)
-        payload = {
-            "model": model,
-            "input": prompt,
-            "temperature": float(temperature),
-            "top_p": float(top_p),
-            "max_output_tokens": int(max_tokens),
-        }
-    else:
-        url = f"{base}/chat/completions"
-        payload = {
-            "model": model,
-            "messages": messages,
-            "temperature": float(temperature),
-            "top_p": float(top_p),
-            "max_tokens": int(max_tokens),
-        }
+    # Use standard Chat Completions API for all keys (including project-scoped)
+    # Project ID is passed via OpenAI-Project header below
+    url = f"{base}/chat/completions"
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": float(temperature),
+        "top_p": float(top_p),
+        "max_tokens": int(max_tokens),
+    }
 
     project_id = _sanitize_key(os.getenv("OPENAI_PROJECT",""))
     headers = {
@@ -82,19 +69,12 @@ def chat(model: str, messages, temperature=0.2, top_p=0.95, max_tokens=300):
         detail = body.strip() or str(err.reason)
         raise RuntimeError(f"OpenAI request failed ({err.code}): {detail}") from err
 
-    # Normalize shape to look like Chat Completions for the caller
-    if isinstance(js, dict) and "choices" in js and js["choices"] and "message" in js["choices"][0]:
-        content = js["choices"][0]["message"]["content"]
-        usage = js.get("usage",{}); meta={"id":js.get("id")}
-    else:
-        content = js.get("output_text") or ""
-        if not content:
-            parts=[]
-            for blk in js.get("output",[]):
-                if isinstance(blk,dict):
-                    for el in blk.get("content",[]):
-                        t = el.get("text") or el.get("output_text")
-                        if t: parts.append(t)
-            content = "\n".join(parts).strip()
-        usage = js.get("usage",{}); meta={"id":js.get("id")}
-    return {"choices":[{"message":{"content":content}}],"usage":usage,"meta":meta}
+    # Standard Chat Completions response format
+    if not (isinstance(js, dict) and "choices" in js and js["choices"]):
+        raise RuntimeError(f"Unexpected response format from OpenAI: {json.dumps(js)[:200]}")
+
+    content = js["choices"][0].get("message", {}).get("content", "")
+    usage = js.get("usage", {})
+    meta = {"id": js.get("id")}
+
+    return {"choices": [{"message": {"content": content}}], "usage": usage, "meta": meta}

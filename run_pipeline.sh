@@ -155,12 +155,8 @@ verify_openai_key() {
   if [[ "$base" != */v1 ]]; then
     base="$base/v1"
   fi
-  local url
-  if [[ -n "$OPENAI_PROJECT" ]]; then
-    url="$base/models?project_id=$OPENAI_PROJECT"
-  else
-    url="$base/models"
-  fi
+  # Use standard /models endpoint (project ID is passed via header below)
+  local url="$base/models"
   local tmp status
   tmp="$(mktemp -t openai_check.XXXXXX)"
   local -a headers=(
@@ -264,13 +260,13 @@ if (( IS_DRY_RUN == 0 )); then
        -d '{"action":"sync","version":6}' >/dev/null 2>&1 || true
 fi
 
-# ---- Generate HTML Dashboard (only at 21:00 run) ----
-CURRENT_HOUR=$(date +%H)
-if (( IS_DRY_RUN == 0 )) && [[ "$CURRENT_HOUR" == "21" ]]; then
-  echo "[dashboard] Running HTML dashboard generation (21:00 daily update)..."
+# ---- Generate HTML Dashboard (after every successful run) ----
+if (( IS_DRY_RUN == 0 )); then
+  echo "[dashboard] Running HTML dashboard generation..."
   "$PY" "$HOME/anki-tools/generate_dashboard_html.py" || {
     echo "[dashboard] WARN: Dashboard generation failed" >&2
   }
+  echo "[dashboard] Dashboard generation complete"
 fi
 
 # ---- Clear inbox after successful processing ----

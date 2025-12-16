@@ -48,6 +48,60 @@ try:
 except ImportError:
     pass
 
+# ===== CATEGORY CLASSIFICATION =====
+TOPIC_KEYWORDS = {
+    "💪 Gym": [
+        "gym", "workout", "exercise", "weight", "muscle", "squat", "bench",
+        "cardio", "trainer", "fitness", "lift", "rep", "set", "barbell",
+        "dumbbell", "stretch", "warm", "cool down", "protein", "athletic",
+        "treino", "músculo", "peso", "academia", "exercício", "ginásio",
+        "agachamento", "alongar", "repetições", "barra", "carga", "biceps", "triceps",
+        "peito", "chest", "bíceps", "tríceps",
+    ],
+    "❤️ Dating": [
+        "date", "dinner", "romantic", "relationship", "girlfriend", "boyfriend",
+        "kiss", "love", "restaurant", "café", "bar", "movie", "flowers",
+        "valentine", "anniversary", "couple",
+        "encontro", "jantar", "romântico", "namorad", "amor", "beijo",
+        "restaurante", "café", "namoro", "casal", "paixão",
+    ],
+    "💼 Work": [
+        "work", "office", "meeting", "email", "deadline", "colleague", "boss",
+        "project", "presentation", "report", "task", "client", "business",
+        "salary", "contract", "team",
+        "trabalho", "escritório", "reunião", "colega", "prazo", "projeto",
+        "equipa", "chefe", "salário", "contrato", "tarefa", "negócio",
+    ],
+    "📋 Admin": [
+        "form", "document", "bureaucracy", "payment", "bill", "passport",
+        "visa", "license", "certificate", "registration", "permit", "tax",
+        "insurance", "bank", "account",
+        "formulário", "documento", "pagamento", "conta", "passaporte",
+        "renovar", "visto", "certidão", "registo", "imposto", "seguro",
+        "banco", "licença",
+    ],
+    "🏡 Daily Life": [
+        "home", "shopping", "cooking", "cleaning", "house", "kitchen", "food",
+        "grocery", "laundry", "dishes", "breakfast", "lunch", "dinner",
+        "sleep", "wake", "shower", "clothes", "market", "stairs", "lobby",
+        "compras", "casa", "cozinha", "comida", "limpar", "lavar",
+        "pequeno-almoço", "almoço", "jantar", "dormir", "acordar",
+        "roupa", "mercado", "cozinhar", "loiça", "guardar", "rodeado", "enrolar",
+    ],
+}
+
+def classify_card(word_en: str, word_pt: str, sentence_en: str, sentence_pt: str) -> str:
+    """Classify a card into a topic based on keyword matching."""
+    text = f"{word_en} {word_pt} {sentence_en} {sentence_pt}".lower()
+    scores = {}
+    for topic, keywords in TOPIC_KEYWORDS.items():
+        score = sum(1 for keyword in keywords if keyword.lower() in text)
+        if score > 0:
+            scores[topic] = score
+    if scores:
+        return max(scores.items(), key=lambda x: x[1])[0]
+    return "🔍 Other"
+
 # ===== PATHS / DEFAULTS =====
 # Force Mobile Documents path; honor ANKI_BASE env; fallback to CloudStorage
 from pathlib import Path
@@ -1085,8 +1139,17 @@ def main(argv: Optional[List[str]] = None) -> int:
 
         try:
             if use_google_sheets:
-                count = gsheets_storage.append_rows(new_rows)
-                _log("INFO", f"[INFO] Appended {count} row(s) to Google Sheets")
+                # Convert rows to Google Sheets format with categories
+                # new_rows are: [word_en, word_pt, sentence_pt, sentence_en, date_added]
+                # Google Sheets expects: [date_added, word_pt, word_en, sentence_pt, sentence_en, category]
+                sheets_rows = []
+                for row in new_rows:
+                    word_en, word_pt, sentence_pt, sentence_en, date_added = row
+                    category = classify_card(word_en, word_pt, sentence_en, sentence_pt)
+                    sheets_row = [date_added, word_pt, word_en, sentence_pt, sentence_en, category]
+                    sheets_rows.append(sheets_row)
+                count = gsheets_storage.append_rows(sheets_rows)
+                _log("INFO", f"[INFO] Appended {count} row(s) to Google Sheets with categories")
             else:
                 append_rows(master_csv, new_rows)
                 _log("INFO", f"[INFO] Appended {len(new_rows)} row(s) to {master_csv}")
