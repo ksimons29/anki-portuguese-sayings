@@ -225,9 +225,9 @@ cd ~/anki-tools && source .venv/bin/activate && python generate_dashboard_html.p
 
 ---
 
-## 🎙️ Voice Memos Transcription for Longer Conversations
+## 🎙️ Voice Memos + Unified Transcribe for Longer Conversations
 
-For **longer Portuguese conversations** (beyond single words/phrases), use **Voice Memos** with built-in transcription, then extract vocabulary into your learning pipeline.
+For **longer Portuguese conversations** (beyond single words/phrases), record with **Voice Memos**, export the audio to iCloud `Portuguese/Transcrições`, and let `unified_transcribe.py` create txt transcripts you can mine for vocabulary.
 
 ### 🎯 Use Cases
 
@@ -236,84 +236,42 @@ For **longer Portuguese conversations** (beyond single words/phrases), use **Voi
 - **Podcast notes**: Record yourself summarizing Portuguese content
 - **Speaking practice**: Record yourself speaking Portuguese, transcribe, and learn from mistakes
 
-### 📱 How to Use Voice Memos Transcription
+### 📱 How to Use Voice Memos with Unified Transcribe
 
 #### **On iPhone/iPad** (iOS 17+ / iPadOS 17+)
 
-1. **Open Voice Memos** app (built-in)
+1. **Record in Voice Memos**:
+   - Tap **record**, speak in Portuguese, tap **Stop**.
+2. **Export the audio to iCloud**:
+   - Tap the recording → **•••** → **Save to Files** → pick **iCloud Drive → Portuguese → Transcrições**.
+   - The file (m4a) will appear in the Transcrições inbox root.
+3. **Run transcription**:
+   - On Mac, run `unified_transcribe.py` (see Unified Transcribe section) or let a scheduled run handle it.
+   - You can also add YouTube URLs to `video_urls.txt` in the same folder before running.
+4. **Review transcripts**:
+   - Open `Transcrições/Transcripts` to read the new txt files.
+5. **Send words to Anki**:
+   - For each word/phrase you want, run **Save to AnkiInbox** or append to `quick.jsonl`.
 
-2. **Start Recording**:
-   - Tap the **red record button**
-   - Speak in Portuguese (switch between English/Portuguese naturally)
-   - Tap **Stop** when done
+#### **On Mac** (macOS 14+)
 
-3. **Get Transcription**:
-   - Tap the recording you just made
-   - Tap the **quote bubble icon** (transcript) at bottom right
-   - iOS will **auto-transcribe** the Portuguese audio
-   - Wait a few seconds for transcription to complete
-
-4. **Review & Extract**:
-   - Read through the Portuguese transcript
-   - Identify words/phrases you want to learn
-   - **Select text** → **Copy**
-
-5. **Send to Anki**:
-   - Open **Notes** app (or anywhere you can type)
-   - **Paste** the Portuguese text
-   - Add to **Apple Notes** with header like:
+1. **Record in Voice Memos**:
+   - Click **record**, speak in Portuguese, click **Stop**.
+2. **Export to Transcrições**:
+   - Right-click the recording → **Share** → **Save to Files** → choose **iCloud Drive → Portuguese → Transcrições** (or drag the m4a there in Finder).
+3. **Run transcription**:
+   - From Terminal:
+     ```bash
+     export INBOX_DIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Transcrições"
+     export TRANSCRIBE_MODEL="whisper-1"
+     export TRANSCRIBE_PT_VARIANT="pt"
+     python unified_transcribe.py
      ```
-     # Gym Conversation - 2025-12-11
-
-     [Paste full Portuguese transcript here]
-
-     **Words to learn:**
-     - aumentar a carga
-     - fazer agachamentos
-     - série completa
-     ```
-
-6. **Capture Individual Words**:
-   - From your Notes overview, identify specific words
-   - For each word, run your **"Save to AnkiInbox"** Shortcut
-   - Type or dictate each word individually
-   - Pipeline will enrich and add to Anki at next run (09:00, 13:00, 17:00, or 21:00)
-
-#### **On Mac** (macOS 14 Sonoma+)
-
-1. **Open Voice Memos** app (built-in)
-
-2. **Record** (using Mac microphone):
-   - Click **red record button**
-   - Speak Portuguese
-   - Click **Stop**
-
-3. **Get Transcription**:
-   - Select the recording
-   - Click **transcript icon** (quote bubble) in playback controls
-   - macOS auto-transcribes Portuguese audio
-
-4. **Extract to Notes**:
-   - Select transcript text
-   - Copy/paste into **Apple Notes** or **TextEdit**
-   - Organize by date, topic, or source
-
-5. **Feed into Pipeline**:
-   - Review transcript, identify vocabulary
-   - Use **"Save to AnkiInbox"** Shortcut for each word (or type directly into `quick.jsonl`)
+4. **Review transcripts and add to Anki**:
+   - Open the new txt files in `Transcripts/`, pick words, and add them via **Save to AnkiInbox** or `quick.jsonl`.
 
 ### 🌐 Language Support
-
-Voice Memos supports **Portuguese transcription** on:
-- **iOS 17+** (iPhone/iPad)
-- **macOS 14+** (Sonoma and later)
-
-**Supported languages** for transcription:
-- Portuguese (European & Brazilian)
-- English
-- Spanish, French, German, Italian, Japanese, Korean, Mandarin Chinese, Cantonese, and more
-
-The transcription **auto-detects language** based on what you speak, so you can switch between English and Portuguese mid-recording.
+- `unified_transcribe.py` defaults to Portuguese with `TRANSCRIBE_PT_VARIANT=pt`; set `TRANSCRIBE_AUTO_DETECT=1` to let Whisper detect language.
 
 ### 📝 Best Practices
 
@@ -351,45 +309,14 @@ Apple Notes Structure:
 
 ### 🔄 Complete Workflow Example
 
-**Scenario**: You had a 3-minute conversation with your Portuguese trainer at the gym.
+**Scenario**: You recorded a 3-minute conversation with your Portuguese trainer at the gym.
 
-1. **Record** (iPhone Voice Memos):
-   - Open Voice Memos
-   - Record the conversation in real-time
-   - Tap Stop
-
-2. **Transcribe** (automatic):
-   - Tap recording → tap transcript icon
-   - Wait 10-30 seconds for transcription
-   - Review Portuguese text
-
-3. **Organize** (Apple Notes):
-   ```
-   # Gym - Treino de Força - 2025-12-11
-
-   [Full Portuguese transcript pasted here]
-
-   **New vocabulary identified:**
-   - aumentar a carga → increase the weight
-   - série completa → full set
-   - recuperação muscular → muscle recovery
-   - alongamento dinâmico → dynamic stretching
-   ```
-
-4. **Capture** (Shortcut):
-   - For each word, run "Save to AnkiInbox" Shortcut
-   - Type/dictate: `aumentar a carga`
-   - Repeat for other words
-
-5. **Enrich** (automatic at next pipeline run):
-   - Pipeline reads `quick.jsonl` at 21:00
-   - GPT generates Portuguese sentence + English translation
-   - Cards added to Anki automatically
-
-6. **Review** (dashboard at 21:00):
-   - Open `~/Desktop/Portuguese-Dashboard.html`
-   - See new "Gym" category cards
-   - Review sentences in context
+1. **Record** in Voice Memos (iPhone).
+2. **Export audio**: Save the m4a to **iCloud Drive → Portuguese → Transcrições**.
+3. **Transcribe**: On Mac, run `unified_transcribe.py` (or wait for the next scheduled run) to create a txt file in `Transcrições/Transcripts`.
+4. **Organize**: Open the txt, copy the relevant lines, and keep a short list of target words/phrases.
+5. **Capture to Anki inbox**: For each target, run **Save to AnkiInbox** or append to `quick.jsonl`.
+6. **Enrich and review**: Let the pipeline run; new cards appear in Anki and on the dashboard.
 
 ### 💡 Pro Tips
 
