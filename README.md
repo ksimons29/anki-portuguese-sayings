@@ -6,6 +6,8 @@ A clean, end-to-end pipeline that turns quick notes on your **iPhone, iPad, or M
 > **NEW**: 🎨 **Interactive HTML Dashboard** — Get a beautiful, browser-based overview of your Portuguese vocabulary pulled directly from Anki! Features searchable categories (Gym, Dating, Work, Admin, Daily Life), stats, and full sentences. Auto-updates at 21:00 daily. See [Dashboard](#-interactive-html-dashboard) below.
 >
 > **NEW**: 🎙️ **Voice Memos Transcription** — Record longer Portuguese conversations on iPhone/iPad/Mac with built-in Portuguese transcription, then extract vocabulary into your learning pipeline. See [Voice Memos](#%EF%B8%8F-voice-memos-transcription-for-longer-conversations) below.
+>
+> **NEW**: 🎧 **Unified Transcribe (YouTube + audio inbox)** — Download YouTube audio or drop files in `Portuguese/Transcrições`, transcribe with Whisper via `unified_transcribe.py`, and mine the txt outputs for new words before sending them into the Anki inbox. See [Unified Transcribe](#-unified-transcribe-youtube-and-audio-inbox--transcripts) below.
 
 - ✍️ **Capture** → use the Shortcut **Save to AnkiInbox** (prompts you to type or dictate a word in **Portuguese or English**).
 - 🧠 **Normalize to a lemma** → smart rules + stopwords pick the meaningful keyword (see “Stopwords & Lemma Extraction” below).
@@ -422,6 +424,68 @@ Apple Notes Structure:
 **Recommendation**: Use **both**!
 - **Shortcut**: Day-to-day vocabulary as you encounter it
 - **Voice Memos**: Weekly conversation practice, longer content analysis
+
+---
+
+<a id="-unified-transcribe-youtube-and-audio-inbox--transcripts"></a>
+
+## 🎧 Unified Transcribe (YouTube and audio inbox → transcripts)
+
+A companion workflow that pulls YouTube audio or any audio files you drop into iCloud `Portuguese/Transcrições`, generates txt transcripts with Whisper, and lets you mine them for new vocabulary before sending items into the Anki inbox.
+
+### What it does
+1. Reads YouTube links from `video_urls.txt` in your Transcrições inbox.
+2. Downloads audio for those links into the same inbox folder with `yt-dlp`.
+3. Scans the inbox root for audio files (mp3, mp4, mpeg, mpga, m4a, wav, webm, ogg, oga, flac).
+4. Transcribes each new audio file with the OpenAI API and saves one transcript txt per file into `Transcripts`.
+5. Moves processed audio into `Archive`.
+6. Avoids reprocessing by hashing audio contents into `transcribed_index.jsonl` and using `youtube_downloaded_archive.txt` for YouTube ids.
+7. Keeps log entries for failures in `Transcripts/transcribe_errors.log`.
+
+### Folder layout
+- Inbox base: `iCloud Drive/Portuguese/Transcrições`
+- Inputs: `video_urls.txt` (one URL per line, `#` comments allowed) and any audio dropped in the inbox root
+- Outputs: `Transcripts/` for txt files and `Archive/` for processed audio
+- Indexes: `transcribed_index.jsonl` (SHA256 dedupe) and `youtube_downloaded_archive.txt` (YouTube download archive)
+- Log: `Transcripts/transcribe_errors.log` for any failures
+
+### Transcript filenames
+- Each transcript starts with the audio modified timestamp `YYYYMMDD HHMMSS` followed by a cleaned title.
+- Example: `20251215 231455 Cinco hipermecados assaltados em Lisboa [vwzQwxzXus8].txt`
+- If a name already exists, the script adds a numeric suffix.
+
+### Requirements
+1. Python 3
+2. OpenAI Python package `openai`
+3. `yt-dlp` for YouTube downloads
+4. `ffmpeg` for audio extraction and optional compression
+5. A valid OpenAI API key stored in Keychain or set as an environment variable
+
+### OpenAI API key
+- Resolution order: `OPENAI_API_KEY` environment variable, then macOS Keychain service `anki-tools-openai`.
+- If both exist, the environment variable wins. Recommended setup is Keychain plus unsetting `OPENAI_API_KEY` when you have multiple projects.
+
+### Portuguese transcription preference
+- The script biases toward Portuguese using the language hint `pt`.
+- Set `TRANSCRIBE_PT_VARIANT="pt"`. Do not use `pt-PT` because the API expects ISO 639 1 format and will reject it.
+- To allow auto detection, set `TRANSCRIBE_AUTO_DETECT=1`.
+
+### How to run (VS Code terminal or shell)
+```bash
+export INBOX_DIR="$HOME/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Transcrições"
+unset OPENAI_API_KEY
+export TRANSCRIBE_MODEL="whisper-1"
+export TRANSCRIBE_PT_VARIANT="pt"
+python unified_transcribe.py
+```
+- Set `MOVE_AUDIO_TO_ARCHIVE=0` if you want to keep processed audio in place; `MOVE_SKIPPED_TO_ARCHIVE=0` stops moving duplicates.
+- Override `MAX_UPLOAD_BYTES` (default 26214400) to control when ffmpeg compression runs.
+
+### From transcripts to Anki inbox
+1. Open the newest txt files in `Transcripts/` and skim for unknown Portuguese words or phrases.
+2. Add each item with the **Save to AnkiInbox** Shortcut or append a JSON line to `~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/inbox/quick.jsonl`.
+3. Run `~/anki-tools/run_pipeline.sh` (or wait for the LaunchAgent schedule) to enrich with GPT, push to AnkiConnect, and refresh the dashboard.
+
 
 ---
 
@@ -1161,14 +1225,6 @@ Common issues:
 ---
 
 ## 🗒️ Changelog
-- **2025-12-15**
-  - **Fixed Google Sheets integration** after configuration issues
-    - Corrected spreadsheet ID in `google_sheets.py` (was set to placeholder text)
-    - Added detailed error tracebacks for better debugging
-    - Created `test_sheets_connection.py` diagnostic tool for connection testing
-    - Updated `GOOGLE_SHEETS_SETUP.md` with clearer instructions
-  - Google Sheets integration now fully operational alongside CSV storage
-
 - **2025-12-16**
   - **Google Sheets Integration** with automatic categorization
     - Implemented primary storage backend using Google Sheets API
@@ -1201,6 +1257,16 @@ Common issues:
     - Created `UPDATE_SHEETS_README.md` with migration guide
     - Added comprehensive Google Sheets Integration section to README
     - Documented all category keywords and classification logic
+- **2025-12-15**
+  - **Fixed Google Sheets integration** after configuration issues
+    - Corrected spreadsheet ID in `google_sheets.py` (was set to placeholder text)
+    - Added detailed error tracebacks for better debugging
+    - Created `test_sheets_connection.py` diagnostic tool for connection testing
+    - Updated `GOOGLE_SHEETS_SETUP.md` with clearer instructions
+  - Google Sheets integration now fully operational alongside CSV storage
+- **2025-12-12**
+  - Added **Unified Transcribe (YouTube + audio inbox)** section for `unified_transcribe.py`, covering Transcrições layout, dedupe indexes, run commands, and the handoff into the Anki inbox.
+  - Linked the new transcription flow from the top callout and aligned language hint and key handling guidance with the rest of the pipeline.
 
 - **2025-12-11**
   - Added **Interactive HTML Dashboard** (`generate_dashboard_html.py`) — Beautiful browser-based learning overview
