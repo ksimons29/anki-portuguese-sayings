@@ -1024,7 +1024,69 @@ https://platform.openai.com/usage
 
 ---
 
+## 📊 Google Sheets Integration
+
+The pipeline can store vocabulary data in **Google Sheets** in addition to the local CSV file. This enables:
+- 📱 **Mobile access** to your vocabulary database via Google Sheets mobile app
+- 🔄 **Real-time sync** across all devices
+- 📈 **Easy data analysis** and custom views
+- 🔗 **Sharing** with tutors or study partners
+
+### Setup
+
+See [GOOGLE_SHEETS_SETUP.md](./GOOGLE_SHEETS_SETUP.md) for complete setup instructions. Quick summary:
+
+1. **Create Google Cloud service account** (free)
+   - Enable Google Sheets API
+   - Create service account and download JSON credentials
+
+2. **Save credentials locally**
+   ```bash
+   mkdir -p ~/.config/anki-tools
+   mv ~/Downloads/your-project-xxxxx.json ~/.config/anki-tools/credentials.json
+   ```
+
+3. **Share your spreadsheet** with the service account email
+   - Find the `client_email` in the credentials JSON
+   - Add it as an Editor to your Google Sheet
+
+4. **Test the connection**
+   ```bash
+   python3 ~/anki-tools/google_sheets.py
+   ```
+
+Once configured, the pipeline will automatically update both Google Sheets and the local CSV file on each run.
+
+**Spreadsheet format:**
+- Column A: `word_en` (English word)
+- Column B: `word_pt` (Portuguese word)
+- Column C: `sentence_pt` (Portuguese example)
+- Column D: `sentence_en` (English translation)
+- Column E: `date_added` (YYYY-MM-DD)
+
+### Troubleshooting
+
+Run the diagnostic script for detailed connection testing:
+```bash
+python3 ~/anki-tools/test_sheets_connection.py
+```
+
+Common issues:
+- **404 error**: Spreadsheet not shared with service account, or incorrect spreadsheet ID
+- **Credentials not found**: Missing or incorrect path to credentials.json file
+- **Permission denied**: Service account needs "Editor" access to the spreadsheet
+
+---
+
 ## 🗒️ Changelog
+- **2025-12-15**
+  - **Fixed Google Sheets integration** after configuration issues
+    - Corrected spreadsheet ID in `google_sheets.py` (was set to placeholder text)
+    - Added detailed error tracebacks for better debugging
+    - Created `test_sheets_connection.py` diagnostic tool for connection testing
+    - Updated `GOOGLE_SHEETS_SETUP.md` with clearer instructions
+  - Google Sheets integration now fully operational alongside CSV storage
+
 - **2025-12-11**
   - Added **Interactive HTML Dashboard** (`generate_dashboard_html.py`) — Beautiful browser-based learning overview
     - Pulls data **directly from Anki** via AnkiConnect API (live, real-time data)
