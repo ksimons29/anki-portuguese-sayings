@@ -67,13 +67,29 @@ Successfully connected! Found X rows.
 ## Spreadsheet Format
 
 The spreadsheet should have these columns (in order):
-- A: word_en (English word)
+- A: date_added (YYYY-MM-DD)
 - B: word_pt (Portuguese word)
-- C: sentence_pt (Portuguese example sentence)
-- D: sentence_en (English translation)
-- E: date_added (YYYY-MM-DD)
+- C: word_en (English word)
+- D: sentence_pt (Portuguese example sentence)
+- E: sentence_en (English translation)
+- F: category (e.g., 💪 Gym, ❤️ Dating, 💼 Work, 📋 Admin, 🏡 Daily Life, 🔍 Other)
 
 The first row should contain headers.
+
+## Updating Existing Spreadsheet Structure
+
+If you have an existing spreadsheet with the old column structure, run the update script:
+
+```bash
+cd ~/anki-portuguese-sayings
+python3 update_sheets_structure.py
+```
+
+This script will:
+1. Reorder columns to match the new structure
+2. Remove any redundant header rows
+3. Add category classification to all rows
+4. Ensure all cards from your Anki deck are present in the sheet
 
 ## Environment Variables
 

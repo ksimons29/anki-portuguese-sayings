@@ -579,6 +579,88 @@ Manual kickstart: `bash ~/anki-tools/run_pipeline.sh`
 
 ---
 
+## 📊 Google Sheets Integration
+
+The pipeline can sync vocabulary data to Google Sheets as the primary storage backend, with automatic categorization and proper column ordering.
+
+### Google Sheets Data Format
+
+**Column order (enforced automatically):**
+
+| Column | Field | Description |
+|--------|-------|-------------|
+| A | `date_added` | Date in YYYY-MM-DD format |
+| B | `word_pt` | Portuguese word or phrase |
+| C | `word_en` | English translation |
+| D | `sentence_pt` | Portuguese example sentence (C1 level, 12-22 words) |
+| E | `sentence_en` | English translation of example |
+| F | `category` | Auto-assigned category (💪 Gym, ❤️ Dating, 💼 Work, 📋 Admin, 🏡 Daily Life, 🔍 Other) |
+
+**Example row:**
+```
+2025-12-16	calmo	calm	Ele permaneceu calmo durante toda a situação difícil.	He remained calm throughout the difficult situation.	🔍 Other
+```
+
+### Category Classification
+
+All entries are automatically classified into categories based on bilingual keyword matching:
+
+- **💪 Gym**: Fitness, workout, exercise-related vocabulary (gym, treino, músculo, peso, bíceps, etc.)
+- **❤️ Dating**: Romance, relationships, social interactions (date, amor, romântico, jantar, etc.)
+- **💼 Work**: Office, business, professional context (work, reunião, projeto, escritório, etc.)
+- **📋 Admin**: Bureaucracy, documents, official processes (formulário, documento, passaporte, etc.)
+- **🏡 Daily Life**: Home, shopping, cooking, everyday activities (casa, compras, cozinha, escadas, etc.)
+- **🔍 Other**: Everything else (fallback category)
+
+### Setup
+
+See `GOOGLE_SHEETS_SETUP.md` for complete setup instructions including:
+- Creating a Google Cloud project
+- Enabling Google Sheets API
+- Creating service account credentials
+- Sharing your spreadsheet
+
+### Usage
+
+The pipeline automatically uses Google Sheets if credentials are configured:
+
+```bash
+# Run pipeline - automatically syncs to Google Sheets
+cd ~/anki-tools
+bash run_pipeline.sh
+```
+
+To force CSV mode instead:
+```bash
+export USE_CSV=1
+bash run_pipeline.sh
+```
+
+### Maintenance Scripts
+
+**Fix column order for existing entries:**
+```bash
+cd ~/anki-tools
+python3 update_sheets_structure.py
+```
+
+**Fix specific problematic rows:**
+```bash
+python3 fix_rows_612_615.py  # For rows with wrong column order
+python3 fix_stairs_row.py     # Find and fix specific entries
+```
+
+### Benefits
+
+- ✅ **Browser-accessible**: View and edit from any device
+- ✅ **Real-time collaboration**: Multiple people can access
+- ✅ **Automatic categorization**: All entries get smart categories
+- ✅ **Correct column order**: Enforced by pipeline
+- ✅ **Sync with Anki**: Data flows to both Sheets and Anki deck
+- ✅ **Dashboard integration**: Categories power the HTML dashboard
+
+---
+
 ## 🧾 Anki Card Data Contract (Note Model & Field Order)
 
 **Note type (model):** GPT Vocabulary Automater  
@@ -1025,6 +1107,40 @@ https://platform.openai.com/usage
 ---
 
 ## 🗒️ Changelog
+
+- **2025-12-16**
+  - **Google Sheets Integration** with automatic categorization
+    - Implemented primary storage backend using Google Sheets API
+    - Column format: `date_added | word_pt | word_en | sentence_pt | sentence_en | category`
+    - All entries automatically classified into 6 categories: 💪 Gym, ❤️ Dating, 💼 Work, 📋 Admin, 🏡 Daily Life, 🔍 Other
+    - Bilingual keyword matching for accurate categorization
+    - Updated `google_sheets.py` module to support new 6-column format
+    - Created `update_sheets_structure.py` for migrating existing data
+  - **Fixed OpenAI project-scoped API key support**
+    - Removed incorrect `/responses` endpoint logic
+    - Now uses standard `/chat/completions` for all key types
+    - Project ID correctly passed via `OpenAI-Project` header
+    - Fixed validation in `run_pipeline.sh` to use header instead of query parameter
+    - Added `fix_openai_key.sh` diagnostic tool for troubleshooting
+  - **Dashboard improvements**
+    - Now auto-generates after every successful pipeline run (not just 21:00)
+    - Categories sync from Google Sheets data
+    - Removed time-based restriction for dashboard updates
+  - **Data quality tools**
+    - Created maintenance scripts for fixing column order issues
+    - `fix_rows_612_615.py` - Fix specific rows with wrong column order
+    - `fix_stairs_row.py` - Find and fix entries by keyword
+    - `fix_row_611_specifically.py` - Interactive row examination tool
+  - **Testing tools**
+    - Added `test_full_workflow.sh` - End-to-end pipeline testing
+    - Added `test_calm_entry.sh` - Verify Google Sheets format
+    - Added `run_sheets_update.sh` - Automated setup script
+  - **Documentation**
+    - Updated `GOOGLE_SHEETS_SETUP.md` with new column format
+    - Created `UPDATE_SHEETS_README.md` with migration guide
+    - Added comprehensive Google Sheets Integration section to README
+    - Documented all category keywords and classification logic
+
 - **2025-12-11**
   - Added **Interactive HTML Dashboard** (`generate_dashboard_html.py`) — Beautiful browser-based learning overview
     - Pulls data **directly from Anki** via AnkiConnect API (live, real-time data)

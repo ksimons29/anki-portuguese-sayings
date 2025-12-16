@@ -14,12 +14,13 @@ Setup instructions:
 5. Set GOOGLE_SHEETS_CREDENTIALS env var to the path of the JSON key file
    OR place credentials.json in ~/.config/anki-tools/
 
-Spreadsheet format (columns A-E):
-  A: word_en
+Spreadsheet format (columns A-F):
+  A: date_added
   B: word_pt
-  C: sentence_pt
-  D: sentence_en
-  E: date_added
+  C: word_en
+  D: sentence_pt
+  E: sentence_en
+  F: category
 """
 from __future__ import annotations
 
@@ -35,16 +36,18 @@ SPREADSHEET_ID = "1q20cEuHXoaLNWJ06i1Nv9Eo2JkJ00LMmPboTYSGz1xg"
 SHEET_NAME = "Sheet1"  # Default sheet name, can be overridden
 
 # Column mapping (0-indexed for internal use)
+# New structure as per README: date_added, word_pt, word_en, sentence_pt, sentence_en, category
 COLUMNS = {
-    "word_en": 0,
+    "date_added": 0,
     "word_pt": 1,
-    "sentence_pt": 2,
-    "sentence_en": 3,
-    "date_added": 4,
+    "word_en": 2,
+    "sentence_pt": 3,
+    "sentence_en": 4,
+    "category": 5,
 }
 
 # Expected headers
-HEADERS = ["word_en", "word_pt", "sentence_pt", "sentence_en", "date_added"]
+HEADERS = ["date_added", "word_pt", "word_en", "sentence_pt", "sentence_en", "category"]
 
 
 def _get_credentials_path() -> Optional[Path]:
@@ -188,7 +191,7 @@ class GoogleSheetsStorage:
         """
         Get all rows from the spreadsheet.
 
-        Returns list of dicts with keys: word_en, word_pt, sentence_pt, sentence_en, date_added
+        Returns list of dicts with keys: date_added, word_pt, word_en, sentence_pt, sentence_en, category
         """
         # Use cache if available and requested
         if use_cache and self._data_cache is not None:
@@ -205,13 +208,14 @@ class GoogleSheetsStorage:
 
         rows = []
         for row in data_rows:
-            if len(row) >= 5 and row[0].strip():  # Has word_en
+            if len(row) >= 3 and row[2].strip():  # Has word_en (column index 2)
                 rows.append({
-                    "word_en": row[0].strip(),
+                    "date_added": row[0].strip() if len(row) > 0 else "",
                     "word_pt": row[1].strip() if len(row) > 1 else "",
-                    "sentence_pt": row[2].strip() if len(row) > 2 else "",
-                    "sentence_en": row[3].strip() if len(row) > 3 else "",
-                    "date_added": row[4].strip() if len(row) > 4 else "",
+                    "word_en": row[2].strip(),
+                    "sentence_pt": row[3].strip() if len(row) > 3 else "",
+                    "sentence_en": row[4].strip() if len(row) > 4 else "",
+                    "category": row[5].strip() if len(row) > 5 else "",
                 })
 
         self._data_cache = rows
@@ -241,7 +245,7 @@ class GoogleSheetsStorage:
         Append rows to the spreadsheet.
 
         Args:
-            rows: List of [word_en, word_pt, sentence_pt, sentence_en, date_added]
+            rows: List of [date_added, word_pt, word_en, sentence_pt, sentence_en, category]
 
         Returns:
             Number of rows appended
