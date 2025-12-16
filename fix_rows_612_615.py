@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Fix specific rows 612-615 in Google Sheets to correct column order.
+Fix specific rows 611-615 in Google Sheets to correct column order.
 Target order: date_added, word_pt, word_en, sentence_pt, sentence_en, category
 """
 import sys
@@ -33,7 +33,7 @@ def classify_card(word_en: str, word_pt: str, sentence_en: str, sentence_pt: str
             scores[topic] = score
     return max(scores.items(), key=lambda x: x[1])[0] if scores else "🔍 Other"
 
-print("=== FIXING ROWS 612-615 IN GOOGLE SHEETS ===\n")
+print("=== FIXING ROWS 611-615 IN GOOGLE SHEETS ===\n")
 
 # Connect
 print("[1/4] Connecting to Google Sheets...")
@@ -56,11 +56,11 @@ header = all_values[0]
 print(f"      Header: {header}")
 print(f"      Total rows: {len(all_values)}\n")
 
-# Check rows 612-615 (row numbers are 1-indexed in sheets, 0-indexed in Python)
-# Row 612 in sheet = index 612 in array (including header at index 0)
-print("[3/4] Checking rows 612-615...")
+# Check rows 611-615 (row numbers are 1-indexed in sheets, 0-indexed in Python)
+# Row 611 in sheet = index 611 in array (including header at index 0)
+print("[3/4] Checking rows 611-615...")
 
-target_rows = [612, 613, 614, 615]  # Sheet row numbers
+target_rows = [611, 612, 613, 614, 615]  # Sheet row numbers
 fixed_count = 0
 
 for row_num in target_rows:
@@ -118,7 +118,7 @@ print(f"\n[4/4] Complete!")
 print(f"      Fixed {fixed_count} rows\n")
 
 print("=== VERIFICATION ===")
-print("Re-reading rows 612-615 to verify...\n")
+print("Re-reading rows 611-615 to verify...\n")
 
 # Re-read to verify
 all_values = worksheet.get_all_values()
