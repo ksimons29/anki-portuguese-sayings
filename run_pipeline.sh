@@ -155,12 +155,8 @@ verify_openai_key() {
   if [[ "$base" != */v1 ]]; then
     base="$base/v1"
   fi
-  local url
-  if [[ -n "$OPENAI_PROJECT" ]]; then
-    url="$base/models?project_id=$OPENAI_PROJECT"
-  else
-    url="$base/models"
-  fi
+  # Use standard /models endpoint (project ID is passed via header below)
+  local url="$base/models"
   local tmp status
   tmp="$(mktemp -t openai_check.XXXXXX)"
   local -a headers=(
