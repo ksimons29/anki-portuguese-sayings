@@ -103,6 +103,9 @@ def _get_gspread_client():
 
 def _get_worksheet(spreadsheet_id: str = SPREADSHEET_ID, sheet_name: str = SHEET_NAME):
     """Get the worksheet object."""
+    print(f"[DEBUG] Opening spreadsheet: {spreadsheet_id}")
+    print(f"[DEBUG] Spreadsheet ID length: {len(spreadsheet_id)}")
+    print(f"[DEBUG] Spreadsheet ID repr: {repr(spreadsheet_id)}")
     client = _get_gspread_client()
     spreadsheet = client.open_by_key(spreadsheet_id)
 
@@ -325,6 +328,9 @@ def is_available() -> bool:
 if __name__ == "__main__":
     # Test the connection
     print("Testing Google Sheets connection...")
+    print(f"[DEBUG] Using SPREADSHEET_ID: {SPREADSHEET_ID}")
+    print(f"[DEBUG] SPREADSHEET_ID length: {len(SPREADSHEET_ID)}")
+    print(f"[DEBUG] SPREADSHEET_ID repr: {repr(SPREADSHEET_ID)}")
 
     if not is_available():
         print("ERROR: Google Sheets integration not available.")
@@ -346,4 +352,7 @@ if __name__ == "__main__":
 
     except Exception as e:
         print(f"ERROR: {e}")
+        import traceback
+        print("\nFull error details:")
+        traceback.print_exc()
         exit(1)

@@ -496,17 +496,22 @@ def _detect_csv_format(csv_path: Path) -> Tuple[bool, str]:
         return (False, 'new')
 
     with csv_path.open("r", encoding="utf-8", newline="") as f:
-        first_line = f.readline().strip()
+        reader = csv.reader(f)
+        try:
+            first_row = next(reader)
+        except StopIteration:
+            return (False, 'new')
 
-    if not first_line:
+    if not first_row:
         return (False, 'new')
 
-    # Check for header
-    if "word_en" in first_line.lower():
+    # Check for header - look for 'word_en' in any field
+    if any("word_en" in field.lower() for field in first_row):
         return (True, 'new')
 
     # No header - check if first field is a date (old format)
-    first_field = first_line.split(',')[0].strip()
+    # Strip quotes and whitespace
+    first_field = first_row[0].strip().strip('"').strip("'")
     if re.match(r'^\d{4}-\d{2}-\d{2}$', first_field):
         return (False, 'old')
 
