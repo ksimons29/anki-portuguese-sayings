@@ -168,7 +168,6 @@ cd ~/anki-tools && source .venv/bin/activate && python generate_dashboard_html.p
 | `~/anki-tools/generate_dashboard_html.py` | Main generator script (pulls from Anki, classifies, generates HTML) |
 | `~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/Portuguese-Dashboard.html` | Primary output file (syncs to iPhone/iPad via iCloud) |
 | `~/Desktop/Portuguese-Dashboard.html` | Desktop copy for quick Mac access |
-| `~/anki-tools/generate_dashboard.py` | Legacy Apple Notes version (deprecated) |
 
 ### 🔧 Customization
 

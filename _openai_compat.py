@@ -3,15 +3,7 @@ from __future__ import annotations
 import json, os, urllib.request
 from urllib.error import HTTPError
 
-def _sanitize_key(k: str) -> str:
-    if not k:
-        return ""
-    k = k.strip().replace("\n","").replace("\r","").replace("“","").replace("”","").replace("‘","").replace("’","")
-    try:
-        k.encode("ascii")
-    except UnicodeEncodeError:
-        k = k.encode("ascii","ignore").decode("ascii")
-    return k
+from keychain_utils import get_api_key, get_project_id, sanitize_key
 
 def chat(model: str, messages, temperature=0.2, top_p=0.95, max_tokens=300):
     # Mock path for tests
@@ -23,9 +15,13 @@ def chat(model: str, messages, temperature=0.2, top_p=0.95, max_tokens=300):
         }, ensure_ascii=False)
         return {"choices":[{"message":{"content":content}}],"usage":{},"meta":{"id":"mock"}}
 
-    api_key = _sanitize_key(os.getenv("OPENAI_API_KEY",""))
+    api_key = get_api_key()
     if not api_key:
-        raise RuntimeError("OPENAI_API_KEY missing")
+        raise RuntimeError(
+            "OpenAI API key not found. "
+            "Set OPENAI_API_KEY env var or store in Keychain: "
+            'security add-generic-password -a "$USER" -s "anki-tools-openai" -w "sk-..." -U'
+        )
 
     base = os.getenv("OPENAI_BASE_URL","https://api.openai.com").rstrip("/")
     if not base.endswith("/v1"):
@@ -42,7 +38,7 @@ def chat(model: str, messages, temperature=0.2, top_p=0.95, max_tokens=300):
         "max_tokens": int(max_tokens),
     }
 
-    project_id = _sanitize_key(os.getenv("OPENAI_PROJECT",""))
+    project_id = get_project_id()
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",

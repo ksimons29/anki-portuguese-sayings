@@ -6,14 +6,12 @@ from __future__ import annotations
 import argparse
 import os
 import re
-import subprocess
 from pathlib import Path
 from datetime import datetime
-from typing import Optional
 
 from openai import OpenAI
 
-KEYCHAIN_SERVICE_API_KEY = "anki-tools-openai"
+from keychain_utils import require_api_key
 
 MODEL = os.environ.get("TRANSCRIBE_MODEL", "whisper-1")
 LANGUAGE = os.environ.get("TRANSCRIBE_LANG", "pt")
@@ -22,24 +20,6 @@ AUDIO_EXTS = {
     ".m4a", ".mp3", ".wav", ".aac", ".mp4",
     ".mpeg", ".mpga", ".webm", ".aiff", ".flac", ".caf"
 }
-
-def run_cmd(cmd: list[str]) -> str:
-    result = subprocess.run(
-        cmd,
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    return result.stdout.strip()
-
-def read_keychain_secret(service_name: str) -> Optional[str]:
-    try:
-        return run_cmd(
-            ["security", "find-generic-password", "-a", os.environ.get("USER", ""), "-s", service_name, "-w"]
-        ) or None
-    except subprocess.CalledProcessError:
-        return None
 
 def safe_stem(name: str) -> str:
     s = re.sub(r"\s+", " ", name).strip()
@@ -75,10 +55,10 @@ def main() -> int:
         print(f"Folder not found: {base}")
         return 2
 
-    api_key = read_keychain_secret(KEYCHAIN_SERVICE_API_KEY)
-    if not api_key:
-        print(f"Missing Keychain item: {KEYCHAIN_SERVICE_API_KEY}")
-        print('Fix with: security add-generic-password -a "$USER" -s "anki-tools-openai" -w "sk-..." -U')
+    try:
+        api_key = require_api_key()
+    except RuntimeError as e:
+        print(str(e))
         return 3
 
     client = OpenAI(api_key=api_key)
