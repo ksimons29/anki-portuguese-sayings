@@ -7,7 +7,7 @@ A clean, end-to-end pipeline that turns quick notes on your **iPhone, iPad, or M
 >
 > **NEW**: 🎙️ **Voice Memos Transcription** — Record longer Portuguese conversations on iPhone/iPad/Mac with built-in Portuguese transcription, then extract vocabulary into your learning pipeline. See [Voice Memos](#%EF%B8%8F-voice-memos-transcription-for-longer-conversations) below.
 >
-> **NEW**: 🎧 **Unified Transcribe (YouTube + audio inbox)** — Download YouTube audio or drop files in `Portuguese/Transcrições`, transcribe with Whisper via `transcribe_folder_pt.py`, and mine the txt outputs for new words before sending them into the Anki inbox. See [Unified Transcribe](#-unified-transcribe-youtube-and-audio-inbox--transcripts) below.
+> **NEW**: 🎧 **Unified Transcribe (YouTube + audio inbox)** — Download YouTube audio or drop files in `Portuguese/Transcrições`, transcribe with Whisper via `unified_transcribe.py`, and mine the txt outputs for new words before sending them into the Anki inbox. See [Unified Transcribe](#-unified-transcribe-youtube-and-audio-inbox--transcripts) below.
 
 - ✍️ **Capture** → use the Shortcut **Save to AnkiInbox** (prompts you to type or dictate a word in **Portuguese or English**).
 - 🧠 **Normalize to a lemma** → smart rules + stopwords pick the meaningful keyword (see “Stopwords & Lemma Extraction” below).
@@ -226,7 +226,7 @@ cd ~/anki-tools && source .venv/bin/activate && python generate_dashboard_html.p
 
 ## 🎙️ Voice Memos + Unified Transcribe for Longer Conversations
 
-For **longer Portuguese conversations** (beyond single words/phrases), record with **Voice Memos**, export the audio to iCloud `Portuguese/Transcrições`, and let `transcribe_folder_pt.py` create txt transcripts you can mine for vocabulary.
+For **longer Portuguese conversations** (beyond single words/phrases), record with **Voice Memos**, export the audio to iCloud `Portuguese/Transcrições`, and let `unified_transcribe.py` create txt transcripts you can mine for vocabulary.
 
 ### 🎯 Use Cases
 
@@ -245,7 +245,7 @@ For **longer Portuguese conversations** (beyond single words/phrases), record wi
    - Tap the recording → **•••** → **Save to Files** → pick **iCloud Drive → Portuguese → Transcrições**.
    - The file (m4a) will appear in the Transcrições inbox root.
 3. **Run transcription**:
-   - On Mac, run `transcribe_folder_pt.py` (see command below) or let a scheduled run handle it.
+   - On Mac, run `unified_transcribe.py` (see command below) or let a scheduled run handle it.
 4. **Review transcripts**:
    - Open `Transcrições/Transcripts` to read the new txt files.
 5. **Send words to Anki**:
@@ -261,13 +261,13 @@ For **longer Portuguese conversations** (beyond single words/phrases), record wi
    - From Terminal:
      ```bash
      cd ~/anki-portuguese-sayings
-     ~/anki-tools/.venv/bin/python transcribe_folder_pt.py "$HOME/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Transcrições"
+     ~/anki-tools/.venv/bin/python unified_transcribe.py "$HOME/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Transcrições"
      ```
 4. **Review transcripts and add to Anki**:
    - Open the new txt files in `Transcripts/`, pick words, and add them via **Save to AnkiInbox** or `quick.jsonl`.
 
 ### 🌐 Language Support
-- `transcribe_folder_pt.py` defaults to Portuguese (`pt`). Set `TRANSCRIBE_LANG` env var to change the language.
+- `unified_transcribe.py` defaults to Portuguese (`pt`). Set `TRANSCRIBE_LANG` env var to change the language.
 
 ### 📝 Best Practices
 
@@ -309,7 +309,7 @@ Apple Notes Structure:
 
 1. **Record** in Voice Memos (iPhone).
 2. **Export audio**: Save the m4a to **iCloud Drive → Portuguese → Transcrições**.
-3. **Transcribe**: On Mac, run `transcribe_folder_pt.py` (or wait for the next scheduled run) to create a txt file in `Transcrições/transcripts_txt`.
+3. **Transcribe**: On Mac, run `unified_transcribe.py` (or wait for the next scheduled run) to create a txt file in `Transcrições/transcripts_txt`.
 4. **Organize**: Open the txt, copy the relevant lines, and keep a short list of target words/phrases.
 5. **Capture to Anki inbox**: For each target, run **Save to AnkiInbox** or append to `quick.jsonl`.
 6. **Enrich and review**: Let the pipeline run; new cards appear in Anki and on the dashboard.
@@ -396,10 +396,21 @@ A companion workflow that pulls YouTube audio or any audio files you drop into i
 ### How to run (VS Code terminal or shell)
 ```bash
 cd ~/anki-portuguese-sayings
-~/anki-tools/.venv/bin/python transcribe_folder_pt.py "$HOME/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Transcrições"
+~/anki-tools/.venv/bin/python unified_transcribe.py "$HOME/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Transcrições"
 ```
-- Use `--move-to processed` to move transcribed audio files to a subfolder.
-- Use `--skip-existing` to skip files that already have transcripts.
+
+**Options:**
+- `--move-to processed` — Move transcribed audio files to a subfolder
+- `--skip-existing` — Skip files already transcribed (tracked by hash in `transcribed_index.jsonl`)
+- `--skip-youtube` — Skip YouTube downloads, only process local audio files
+
+**YouTube downloads:**
+1. Create a `video_urls.txt` file in your Transcrições folder
+2. Add one YouTube URL per line
+3. Run `unified_transcribe.py` — it will download audio and transcribe automatically
+4. Already-downloaded videos are tracked in `youtube_downloaded_archive.txt`
+
+**Requirements:** Install `yt-dlp` for YouTube support: `brew install yt-dlp`
 
 ### From transcripts to Anki inbox
 1. Open the newest txt files in `Transcripts/` and skim for unknown Portuguese words or phrases.
@@ -1185,7 +1196,7 @@ Common issues:
     - Updated `GOOGLE_SHEETS_SETUP.md` with clearer instructions
   - Google Sheets integration now fully operational alongside CSV storage
 - **2025-12-12**
-  - Added **Unified Transcribe (YouTube + audio inbox)** section for `transcribe_folder_pt.py`, covering Transcrições layout, run commands, and the handoff into the Anki inbox.
+  - Added **Unified Transcribe (YouTube + audio inbox)** section for `unified_transcribe.py`, covering Transcrições layout, run commands, and the handoff into the Anki inbox.
   - Linked the new transcription flow from the top callout and aligned language hint and key handling guidance with the rest of the pipeline.
 
 - **2025-12-11**
