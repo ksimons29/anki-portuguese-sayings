@@ -57,17 +57,6 @@ To remove the key from Keychain:
 security delete-generic-password -a "$USER" -s "anki-tools-openai"
 ```
 
-## Environment Variable Override
-
-For testing or CI environments, you can override the Keychain value by setting environment variables:
-
-```bash
-export OPENAI_API_KEY="sk-test-key"
-export OPENAI_PROJECT="proj_test"  # optional
-```
-
-The scripts check environment variables first, then fall back to Keychain.
-
 ## Keychain Service Names
 
 | Service Name | Purpose |
@@ -124,4 +113,4 @@ key = get_api_key()
 key = require_api_key()
 ```
 
-The shell scripts (`run_pipeline.sh`) read from Keychain and export to environment variables for child processes.
+**Important:** Environment variables like `OPENAI_API_KEY` are **ignored** by the Python scripts to prevent issues with stale/cached keys. Keychain is the only source of truth.

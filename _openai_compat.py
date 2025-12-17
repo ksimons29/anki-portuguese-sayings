@@ -18,8 +18,7 @@ def chat(model: str, messages, temperature=0.2, top_p=0.95, max_tokens=300):
     api_key = get_api_key()
     if not api_key:
         raise RuntimeError(
-            "OpenAI API key not found. "
-            "Set OPENAI_API_KEY env var or store in Keychain: "
+            "OpenAI API key not found in Keychain. Run: "
             'security add-generic-password -a "$USER" -s "anki-tools-openai" -w "sk-..." -U'
         )
 

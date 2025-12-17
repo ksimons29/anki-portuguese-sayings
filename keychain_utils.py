@@ -6,13 +6,11 @@ Centralized API key management for anki-tools.
 This module provides a single, consistent way to access the OpenAI API key
 across all scripts in the project.
 
-Storage: macOS Keychain (primary)
+Storage: macOS Keychain (ONLY source of truth)
 - Service name: "anki-tools-openai"
 - Optional project ID: "anki-tools-openai-project"
 
-Environment variables can override Keychain values for testing or CI:
-- OPENAI_API_KEY
-- OPENAI_PROJECT
+Environment variables are IGNORED to prevent stale key issues.
 """
 
 from __future__ import annotations
@@ -78,41 +76,28 @@ def sanitize_key(key: str) -> str:
 
 def get_api_key() -> Optional[str]:
     """
-    Get the OpenAI API key.
+    Get the OpenAI API key from macOS Keychain.
 
-    Priority:
-    1. OPENAI_API_KEY environment variable (allows override/testing)
-    2. macOS Keychain service "anki-tools-openai"
+    Keychain is the ONLY source - environment variables are ignored
+    to prevent issues with stale/cached keys.
 
     Returns:
         The sanitized API key, or None if not found.
     """
-    # Check environment variable first (allows override for testing/CI)
-    key = os.environ.get("OPENAI_API_KEY", "")
-
-    # Fall back to Keychain
-    if not key:
-        key = _run_security_cmd(KEYCHAIN_SERVICE_API_KEY)
-
+    key = _run_security_cmd(KEYCHAIN_SERVICE_API_KEY)
     return sanitize_key(key) if key else None
 
 
 def get_project_id() -> Optional[str]:
     """
-    Get the OpenAI project ID (optional).
+    Get the OpenAI project ID from macOS Keychain (optional).
 
-    Priority:
-    1. OPENAI_PROJECT environment variable
-    2. macOS Keychain service "anki-tools-openai-project"
+    Keychain is the ONLY source - environment variables are ignored.
 
     Returns:
         The sanitized project ID, or None if not configured.
     """
-    project = os.environ.get("OPENAI_PROJECT", "")
-
-    if not project:
-        project = _run_security_cmd(KEYCHAIN_SERVICE_PROJECT)
-
+    project = _run_security_cmd(KEYCHAIN_SERVICE_PROJECT)
     return sanitize_key(project) if project else None
 
 
@@ -121,7 +106,7 @@ def require_api_key() -> str:
     Get the API key or raise an error with setup instructions.
 
     Raises:
-        RuntimeError: If the API key is not found.
+        RuntimeError: If the API key is not found in Keychain.
 
     Returns:
         The sanitized API key.
@@ -129,9 +114,9 @@ def require_api_key() -> str:
     key = get_api_key()
     if not key:
         raise RuntimeError(
-            "OpenAI API key not found.\n\n"
+            "OpenAI API key not found in Keychain.\n\n"
             "To set up your API key, run:\n"
             f'  security add-generic-password -a "$USER" -s "{KEYCHAIN_SERVICE_API_KEY}" -w "sk-..." -U\n\n'
-            "Or set the OPENAI_API_KEY environment variable."
+            "To update an existing key, use the same command (the -U flag updates it)."
         )
     return key
