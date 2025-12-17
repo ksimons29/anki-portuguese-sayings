@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -34,6 +35,92 @@ from keychain_utils import require_api_key
 # Configuration via environment variables
 MODEL = os.environ.get("TRANSCRIBE_MODEL", "whisper-1")
 LANGUAGE = os.environ.get("TRANSCRIBE_LANG", "pt")
+
+# Audio splitting configuration for large files
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # 25 MB API upload limit
+SAFETY_RATIO = 0.90  # keep chunks below the limit to avoid off-by-a-little failures
+MIN_CHUNK_SECONDS = 60  # never create tiny fragments shorter than 1 minute
+DEFAULT_CHUNK_SECONDS = 600  # fallback chunk size if duration lookup fails
+
+
+def bytes_of(path: Path) -> int:
+    """Returns file size in bytes."""
+    return path.stat().st_size
+
+
+def ffprobe_duration_seconds(path: Path) -> float | None:
+    """Ask ffprobe for audio duration in seconds."""
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v", "error",
+                "-print_format", "json",
+                "-show_format",
+                str(path),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        data = json.loads(result.stdout)
+        duration_str = data.get("format", {}).get("duration")
+        if not duration_str:
+            return None
+        return float(duration_str)
+    except Exception:
+        return None
+
+
+def choose_chunk_seconds(file_bytes: int, duration_seconds: float) -> int:
+    """Decide chunk length to stay under API upload limit."""
+    target_bytes = int(MAX_UPLOAD_BYTES * SAFETY_RATIO)
+    if file_bytes <= target_bytes:
+        return int(duration_seconds)
+    bytes_per_second = file_bytes / max(duration_seconds, 1.0)
+    raw = target_bytes / max(bytes_per_second, 1.0)
+    chunk = int(math.floor(raw))
+    return max(chunk, MIN_CHUNK_SECONDS)
+
+
+def split_audio(input_path: Path, out_dir: Path, chunk_seconds: int) -> list[Path]:
+    """Split audio file into chunks using ffmpeg."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    pattern = out_dir / f"{input_path.stem}_part_%03d.m4a"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel", "error",
+            "-i", str(input_path),
+            "-f", "segment",
+            "-segment_time", str(chunk_seconds),
+            "-c", "copy",
+            str(pattern),
+        ],
+        check=True,
+    )
+    parts = sorted(out_dir.glob(f"{input_path.stem}_part_*.m4a"))
+    return parts
+
+
+def split_if_needed(audio_path: Path) -> list[Path]:
+    """Return original file or split into smaller chunks if too large for API."""
+    file_bytes = bytes_of(audio_path)
+    if file_bytes <= MAX_UPLOAD_BYTES:
+        return [audio_path]
+
+    print(f"  File too large ({file_bytes / 1024 / 1024:.1f} MB), splitting...")
+    duration = ffprobe_duration_seconds(audio_path)
+    if duration is None:
+        chunk_seconds = DEFAULT_CHUNK_SECONDS
+    else:
+        chunk_seconds = choose_chunk_seconds(file_bytes, duration)
+
+    parts_dir = audio_path.parent / "parts" / audio_path.stem
+    parts = split_audio(audio_path, parts_dir, chunk_seconds)
+    print(f"  Split into {len(parts)} parts")
+    return parts
 
 AUDIO_EXTS = {
     ".m4a", ".mp3", ".wav", ".aac", ".mp4",
@@ -282,8 +369,20 @@ def main() -> int:
 
         print(f"Transcribing: {audio_path.name}")
         try:
-            text = transcribe_one_file(client, audio_path)
-            out_path.write_text(text + "\n", encoding="utf-8")
+            # Split large files into chunks if needed
+            parts = split_if_needed(audio_path)
+
+            # Transcribe each part and combine
+            all_text = []
+            for i, part in enumerate(parts):
+                if len(parts) > 1:
+                    print(f"  Transcribing part {i + 1}/{len(parts)}: {part.name}")
+                text = transcribe_one_file(client, part)
+                all_text.append(text)
+
+            # Combine all parts with newlines
+            full_text = "\n\n".join(all_text)
+            out_path.write_text(full_text + "\n", encoding="utf-8")
             ok += 1
 
             # Record in index
