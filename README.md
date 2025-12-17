@@ -710,25 +710,39 @@ If your note type uses different field names or order, update the model to match
 
 ## 📦 Files overview (active + archived)
 
-| Path / File | Purpose (one line) | Used at runtime? |
-|--------------|--------------------|------------------|
-| `~/anki-tools/run_pipeline.sh` | Main shell orchestrator: keeps Mac awake, retrieves OpenAI key, launches Anki, runs the Python transformer, logs output, and rotates inbox. | ✅ Yes |
-| `~/anki-tools/transform_inbox_to_csv.py` | Core transformer: reads `quick.jsonl`, enriches terms with pt-PT + C1 examples, writes `sayings.csv`, updates `last_import.csv`, and syncs with AnkiConnect. | ✅ Yes |
-| `~/anki-tools/_openai_compat.py` | Compatibility shim that wraps the OpenAI API calls to support both old and new SDK versions; imported internally by `transform_inbox_to_csv.py`. | ✅ Yes |
-| `~/anki-tools/merge_inbox.sh` | Utility to merge multiple `quick.jsonl` fragments into one inbox file before processing; used manually for cleanup. | ⚙️ Optional / manual |
-| `~/Library/LaunchAgents/com.anki.sync.quickjsonl.plist` | Active LaunchAgent that triggers `run_pipeline.sh` automatically at defined times (09:00, 13:00, 17:00, 21:00). | ✅ Yes |
-| `~/Library/LaunchAgents/com.anki.sync.quickjsonl.plist.bak` | Backup of the LaunchAgent configuration before recent edits (safe to delete or keep for rollback). | 🚫 Not used |
-| `~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/inbox/quick.jsonl` | iCloud-synced inbox where your Shortcut adds new entries; consumed once per day by the pipeline. | ✅ Yes |
-| `~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/inbox/.rotated-YYYY-MM-DD` | Daily marker file preventing duplicate runs within the same day. | ✅ Yes |
-| `~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/sayings.csv` | Master vocabulary log containing all processed and enriched entries. | ✅ Yes |
-| `~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/last_import.csv` | Snapshot of the most recent processed batch for quick inspection or debugging. | ✅ Yes |
-| `~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs/pipeline.YYYY-MM-DD.log` | Standard output log for each pipeline run (rotated daily). | ✅ Yes |
-| `~/Library/Mobile Documents/com~apple~CloudDocs/Portuguese/Anki/logs/pipeline.YYYY-MM-DD.err` | Error/stderr log for each pipeline run (rotated daily). | ✅ Yes |
-| `Keychain item: anki-tools-openai` | Securely stores your classic OpenAI API key (`sk-…`) for access by the pipeline. | ✅ Yes |
-| `Keychain item: anki-tools-openai-project` | Stores the OpenAI project id (`proj-…`) required for project-scoped keys. | ✅ Yes |
-| `~/anki-tools/.venv/` | Python virtual environment containing dependencies (`openai`, `requests`, etc.). | ✅ Yes |
-| `~/anki-tools/archive/` | Folder for deprecated helpers (`anki_from_csv_dual_audio.py`, `check_openai_key.py`, `import_all.sh`, `sanitize_quick_jsonl.py`, etc.). | 🚫 Not used |
-| `~/anki-tools/archive/backups/` | Historical `.bak` snapshots (e.g., prior `run_pipeline.sh`, `transform_inbox_to_csv.py`, `_openai_compat.py` variants). | 🚫 Not used |
+### Core Scripts
+
+| Path / File | Purpose | Used? |
+|-------------|---------|-------|
+| `run_pipeline.sh` | Main orchestrator: retrieves API key, launches Anki, runs transformer, logs output. | ✅ Yes |
+| `transform_inbox_to_csv.py` | Core transformer: reads `quick.jsonl`, enriches with GPT, writes CSV, syncs to Anki. | ✅ Yes |
+| `unified_transcribe.py` | Transcription: downloads YouTube audio, transcribes with Whisper, auto-splits large files. | ✅ Yes |
+| `generate_dashboard_html.py` | Dashboard: pulls vocabulary from Anki, categorizes, generates HTML overview. | ✅ Yes |
+| `google_sheets.py` | Google Sheets integration for syncing vocabulary data. | ✅ Yes |
+| `_openai_compat.py` | OpenAI API compatibility layer, imported by transform script. | ✅ Yes |
+| `keychain_utils.py` | Centralized API key management from macOS Keychain. | ✅ Yes |
+| `merge_inbox.sh` | Utility to merge multiple `quick.jsonl` fragments. | ⚙️ Manual |
+
+### Data Files
+
+| Path / File | Purpose | Used? |
+|-------------|---------|-------|
+| `~/Library/Mobile Documents/.../inbox/quick.jsonl` | iCloud-synced inbox for new vocabulary entries. | ✅ Yes |
+| `~/Library/Mobile Documents/.../sayings.csv` | Master vocabulary log with all processed entries. | ✅ Yes |
+| `~/Library/Mobile Documents/.../last_import.csv` | Most recent batch for inspection/debugging. | ✅ Yes |
+| `~/Library/Mobile Documents/.../logs/pipeline.*.log` | Daily pipeline run logs. | ✅ Yes |
+| `Keychain: anki-tools-openai` | OpenAI API key (only source, env vars ignored). | ✅ Yes |
+| `Keychain: anki-tools-openai-project` | OpenAI project ID for project-scoped keys. | ⚙️ Optional |
+
+### Archived (not used at runtime)
+
+| Path / File | Purpose |
+|-------------|---------|
+| `archive/fix_*.py` | One-time fix scripts for specific data issues. |
+| `archive/test_*.py`, `archive/test_*.sh` | Diagnostic and test scripts. |
+| `archive/diagnose_inbox.sh` | Inbox diagnostic utility. |
+| `archive/fix_openai_key.sh` | Superseded by `keychain_utils.py`. |
+| `archive/update_sheets_structure.py` | One-time Google Sheets structure update. |
 
 ---
 ### 🔊 Why TTS?
@@ -1156,6 +1170,26 @@ Common issues:
 ---
 
 ## 🗒️ Changelog
+- **2025-12-17**
+  - **Unified Transcribe Script** (`unified_transcribe.py`)
+    - Combined YouTube download + audio transcription into single script
+    - Downloads YouTube audio from `video_urls.txt` using yt-dlp
+    - Auto-splits large files (>25MB) into chunks using ffmpeg
+    - Tracks processed files with `transcribed_index.jsonl` (SHA256 hash dedupe)
+    - Tracks downloaded YouTube videos with `youtube_downloaded_archive.txt`
+  - **API Key Management Overhaul**
+    - Created `keychain_utils.py` for centralized API key access
+    - macOS Keychain is now the ONLY source (environment variables ignored)
+    - Prevents stale/cached key issues that caused auth failures
+    - Added `API_KEY_SETUP.md` documentation
+  - **Code Cleanup**
+    - Deleted hardcoded API key from `archive/check_openai_key.py`
+    - Removed deprecated `transcribe_folder_pt.py` (merged into unified script)
+    - Removed deprecated `generate_dashboard.py` (replaced by HTML version)
+    - Deleted all backup files from `archive/backups/`
+    - Archived 12 unused scripts (fix_*.py, test_*.sh, diagnostics)
+  - **Closes GitHub Issue #9**: Standardized API key management
+
 - **2025-12-16**
   - **Google Sheets Integration** with automatic categorization
     - Implemented primary storage backend using Google Sheets API
