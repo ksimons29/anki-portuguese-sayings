@@ -327,6 +327,21 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
         if c.get("date_added") and c["date_added"] >= month_ago.isoformat()
     )
 
+    # Filter cards from the last 2 weeks for the recent words section
+    two_weeks_ago = today - timedelta(days=14)
+    recent_cards = [
+        c for c in cards
+        if c.get("date_added") and c["date_added"] >= two_weeks_ago.isoformat()
+    ]
+    # Sort by date descending
+    recent_cards.sort(key=lambda x: x.get("date_added", ""), reverse=True)
+
+    # Group recent cards by date
+    recent_by_date = defaultdict(list)
+    for card in recent_cards:
+        date = card.get("date_added", "Unknown")
+        recent_by_date[date].append(card)
+
     # Sort topics
     sorted_topics = sorted(by_topic.items(), key=lambda x: len(x[1]), reverse=True)
 
@@ -546,12 +561,161 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
             transform: rotate(180deg);
         }}
 
+        /* Recent Words Section */
+        .recent-words-section {{
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }}
+
+        .recent-words-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e2e8f0;
+        }}
+
+        .recent-words-title {{
+            font-size: 1.5em;
+            font-weight: 600;
+            color: #2d3748;
+        }}
+
+        .recent-words-badge {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.9em;
+        }}
+
+        .date-group {{
+            margin-bottom: 20px;
+        }}
+
+        .date-group:last-child {{
+            margin-bottom: 0;
+        }}
+
+        .date-label {{
+            font-size: 0.85em;
+            color: #718096;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+            padding-left: 5px;
+        }}
+
+        .words-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 12px;
+        }}
+
+        .word-card {{
+            background: #f7fafc;
+            border-radius: 10px;
+            padding: 12px 15px;
+            border-left: 4px solid #667eea;
+            transition: all 0.2s;
+            cursor: pointer;
+        }}
+
+        .word-card:hover {{
+            background: #edf2f7;
+            transform: translateX(3px);
+        }}
+
+        .word-card.expanded {{
+            background: #edf2f7;
+        }}
+
+        .word-card .word-pair {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }}
+
+        .word-card .pt {{
+            font-weight: 600;
+            color: #2d3748;
+            font-size: 1.05em;
+        }}
+
+        .word-card .arrow {{
+            color: #a0aec0;
+            flex-shrink: 0;
+        }}
+
+        .word-card .en {{
+            color: #667eea;
+            font-size: 0.95em;
+            text-align: right;
+        }}
+
+        .word-card .sentences {{
+            display: none;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #e2e8f0;
+        }}
+
+        .word-card.expanded .sentences {{
+            display: block;
+        }}
+
+        .word-card .sentence-pt {{
+            color: #4a5568;
+            font-style: italic;
+            font-size: 0.9em;
+            line-height: 1.4;
+            margin-bottom: 5px;
+        }}
+
+        .word-card .sentence-en {{
+            color: #718096;
+            font-size: 0.85em;
+            line-height: 1.4;
+        }}
+
+        .no-recent-words {{
+            text-align: center;
+            padding: 30px;
+            color: #718096;
+        }}
+
         @media (max-width: 768px) {{
             .header h1 {{
                 font-size: 1.8em;
             }}
             .stats-grid {{
                 grid-template-columns: 1fr;
+            }}
+            .words-grid {{
+                grid-template-columns: 1fr;
+            }}
+            .word-card .word-pair {{
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 5px;
+            }}
+            .word-card .arrow {{
+                display: none;
+            }}
+            .word-card .en {{
+                text-align: left;
+            }}
+            .recent-words-header {{
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
             }}
         }}
     </style>
@@ -581,6 +745,74 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
                 <div class="stat-number">{len(sorted_topics)}</div>
                 <div class="stat-label">Categories</div>
             </div>
+        </div>
+
+        <div class="recent-words-section">
+            <div class="recent-words-header">
+                <div class="recent-words-title">📅 Recent Words (Last 2 Weeks)</div>
+                <div class="recent-words-badge">{len(recent_cards)} words</div>
+            </div>
+"""
+
+    # Generate recent words grouped by date
+    if recent_cards:
+        sorted_dates = sorted(recent_by_date.keys(), reverse=True)
+        for date in sorted_dates:
+            date_cards = recent_by_date[date]
+            # Format the date nicely
+            try:
+                date_obj = datetime.strptime(date, "%Y-%m-%d")
+                if date == today.isoformat():
+                    formatted_date = "Today"
+                elif date == (today - timedelta(days=1)).isoformat():
+                    formatted_date = "Yesterday"
+                else:
+                    formatted_date = date_obj.strftime("%A, %B %d")
+            except:
+                formatted_date = date
+
+            html += f"""
+            <div class="date-group">
+                <div class="date-label">{formatted_date} ({len(date_cards)} words)</div>
+                <div class="words-grid">
+"""
+            for card in date_cards:
+                word_pt = card.get("word_pt", "").strip()
+                word_en = card.get("word_en", "").strip()
+                sentence_pt = card.get("sentence_pt", "").strip()
+                sentence_en = card.get("sentence_en", "").strip()
+
+                # Escape HTML entities
+                word_pt_safe = word_pt.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                word_en_safe = word_en.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                sentence_pt_safe = sentence_pt.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                sentence_en_safe = sentence_en.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+                html += f"""
+                    <div class="word-card" onclick="this.classList.toggle('expanded')">
+                        <div class="word-pair">
+                            <span class="pt">{word_pt_safe}</span>
+                            <span class="arrow">→</span>
+                            <span class="en">{word_en_safe}</span>
+                        </div>
+                        <div class="sentences">
+                            <div class="sentence-pt">{sentence_pt_safe}</div>
+                            <div class="sentence-en">{sentence_en_safe}</div>
+                        </div>
+                    </div>
+"""
+            html += """
+                </div>
+            </div>
+"""
+    else:
+        html += """
+            <div class="no-recent-words">
+                No words added in the last 2 weeks. Keep learning! 📚
+            </div>
+"""
+
+    html += """
         </div>
 
         <div class="search-box">
