@@ -150,6 +150,101 @@ def anki_invoke(payload: dict) -> dict:
         raise RuntimeError(f"Could not connect to Anki. Is Anki running? Error: {e}")
 
 
+def get_learning_stats(deck_name: str = "Portuguese Mastery (pt-PT)") -> Dict[str, any]:
+    """
+    Get learning statistics from Anki.
+
+    Returns dict with:
+    - learning_count: Cards currently in learning phase
+    - struggling_cards: List of cards with high lapse count (failing often)
+    - due_today: Cards due for review today
+    """
+    stats = {
+        "learning_count": 0,
+        "due_today": 0,
+        "struggling_cards": [],
+    }
+
+    try:
+        # Find all cards in the deck
+        cards_result = anki_invoke({
+            "action": "findCards",
+            "version": 6,
+            "params": {"query": f'deck:"{deck_name}"'}
+        })
+
+        if cards_result.get("error"):
+            print(f"[anki-stats] Error finding cards: {cards_result['error']}")
+            return stats
+
+        card_ids = cards_result.get("result", [])
+        if not card_ids:
+            return stats
+
+        # Get detailed card info
+        cards_info = anki_invoke({
+            "action": "cardsInfo",
+            "version": 6,
+            "params": {"cards": card_ids}
+        })
+
+        if cards_info.get("error"):
+            print(f"[anki-stats] Error getting card info: {cards_info['error']}")
+            return stats
+
+        # Also get notes info for word data
+        note_ids = list(set(c.get("note") for c in cards_info.get("result", []) if c.get("note")))
+        notes_map = {}
+        if note_ids:
+            notes_info = anki_invoke({
+                "action": "notesInfo",
+                "version": 6,
+                "params": {"notes": note_ids}
+            })
+            if not notes_info.get("error"):
+                for note in notes_info.get("result", []):
+                    notes_map[note.get("noteId")] = note
+
+        for card in cards_info.get("result", []):
+            queue = card.get("queue", 0)
+            lapses = card.get("lapses", 0)
+            due = card.get("due", 0)
+            note_id = card.get("note")
+
+            # Queue types:
+            # -1 = suspended, 0 = new, 1 = learning, 2 = review, 3 = day-learn, 4 = preview
+            if queue in (1, 3):  # Learning or day-learn
+                stats["learning_count"] += 1
+
+            # Due today (queue=2 means review, due <= today's day number)
+            if queue == 2:
+                stats["due_today"] += 1
+
+            # Struggling: 3+ lapses
+            if lapses >= 3:
+                note = notes_map.get(note_id, {})
+                fields = note.get("fields", {})
+                word_pt = fields.get("word_pt", {}).get("value", "").strip()
+                word_en = fields.get("word_en", {}).get("value", "").strip()
+                if word_pt and word_en:
+                    stats["struggling_cards"].append({
+                        "word_pt": word_pt,
+                        "word_en": word_en,
+                        "lapses": lapses,
+                    })
+
+        # Sort struggling cards by lapses (most failed first) and limit to top 10
+        stats["struggling_cards"].sort(key=lambda x: x["lapses"], reverse=True)
+        stats["struggling_cards"] = stats["struggling_cards"][:10]
+
+        print(f"[anki-stats] Learning: {stats['learning_count']}, Due: {stats['due_today']}, Struggling: {len(stats['struggling_cards'])}")
+
+    except Exception as e:
+        print(f"[anki-stats] Error fetching stats: {e}")
+
+    return stats
+
+
 def load_cards_from_anki(deck_name: str = "Portuguese Mastery (pt-PT)") -> List[Dict[str, str]]:
     """Load all cards directly from Anki using AnkiConnect."""
     print(f"[anki] Connecting to Anki deck: {deck_name}")
@@ -296,10 +391,13 @@ def load_cards_from_csv() -> List[Dict[str, str]]:
 
 # ===== HTML GENERATION =====
 
-def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Anki") -> str:
+def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Anki", learning_stats: Dict = None) -> str:
     """Generate interactive HTML dashboard."""
     if not cards:
         return "<html><body><h1>No cards found</h1></body></html>"
+
+    if learning_stats is None:
+        learning_stats = {"learning_count": 0, "due_today": 0, "struggling_cards": []}
 
     # Classify cards
     by_topic = defaultdict(list)
@@ -691,9 +789,112 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
             color: #718096;
         }}
 
+        /* Learning Stats Panel (top right) */
+        .header-with-stats {{
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 30px;
+        }}
+
+        .header-left {{
+            flex: 1;
+        }}
+
+        .learning-stats-panel {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 15px;
+            padding: 20px;
+            min-width: 280px;
+            color: white;
+        }}
+
+        .learning-stats-panel h3 {{
+            font-size: 1.1em;
+            margin-bottom: 15px;
+            opacity: 0.95;
+        }}
+
+        .learning-stat-row {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }}
+
+        .learning-stat-row:last-child {{
+            border-bottom: none;
+        }}
+
+        .learning-stat-label {{
+            font-size: 0.9em;
+            opacity: 0.9;
+        }}
+
+        .learning-stat-value {{
+            font-weight: bold;
+            font-size: 1.2em;
+        }}
+
+        .learning-stat-value.warning {{
+            color: #fbd38d;
+        }}
+
+        .struggling-section {{
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255,255,255,0.3);
+        }}
+
+        .struggling-title {{
+            font-size: 0.85em;
+            opacity: 0.9;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }}
+
+        .struggling-word {{
+            background: rgba(255,255,255,0.15);
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin-bottom: 6px;
+            font-size: 0.9em;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+
+        .struggling-word:last-child {{
+            margin-bottom: 0;
+        }}
+
+        .struggling-word .word {{
+            font-weight: 500;
+        }}
+
+        .struggling-word .lapses {{
+            background: rgba(251, 211, 141, 0.3);
+            color: #fbd38d;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }}
+
         @media (max-width: 768px) {{
             .header h1 {{
                 font-size: 1.8em;
+            }}
+            .header-with-stats {{
+                flex-direction: column;
+            }}
+            .learning-stats-panel {{
+                min-width: 100%;
+                order: -1;
+                margin-bottom: 20px;
             }}
             .stats-grid {{
                 grid-template-columns: 1fr;
@@ -723,9 +924,49 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
 <body>
     <div class="container">
         <div class="header">
-            <h1>🇵🇹 Portuguese Learning Dashboard</h1>
-            <p class="subtitle">Last updated: {datetime.now().strftime('%A, %B %d, %Y at %H:%M')}</p>
-            <p class="subtitle" style="margin-top: 5px; font-size: 0.9em;">📊 Data source: <strong>{data_source}</strong></p>
+            <div class="header-with-stats">
+                <div class="header-left">
+                    <h1>🇵🇹 Portuguese Learning Dashboard</h1>
+                    <p class="subtitle">Last updated: {datetime.now().strftime('%A, %B %d, %Y at %H:%M')}</p>
+                    <p class="subtitle" style="margin-top: 5px; font-size: 0.9em;">📊 Data source: <strong>{data_source}</strong></p>
+                </div>
+                <div class="learning-stats-panel">
+                    <h3>📚 Learning Progress</h3>
+                    <div class="learning-stat-row">
+                        <span class="learning-stat-label">Currently Learning</span>
+                        <span class="learning-stat-value">{learning_stats['learning_count']}</span>
+                    </div>
+                    <div class="learning-stat-row">
+                        <span class="learning-stat-label">Due for Review</span>
+                        <span class="learning-stat-value">{learning_stats['due_today']}</span>
+                    </div>
+                    <div class="learning-stat-row">
+                        <span class="learning-stat-label">Need Practice</span>
+                        <span class="learning-stat-value{' warning' if len(learning_stats['struggling_cards']) > 0 else ''}">{len(learning_stats['struggling_cards'])}</span>
+                    </div>
+"""
+
+    # Add struggling words if any
+    if learning_stats['struggling_cards']:
+        html += """
+                    <div class="struggling-section">
+                        <div class="struggling-title">⚠️ Words to Review (3+ fails)</div>
+"""
+        for word in learning_stats['struggling_cards'][:5]:  # Show top 5
+            word_pt_safe = word['word_pt'].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            html += f"""
+                        <div class="struggling-word">
+                            <span class="word">{word_pt_safe}</span>
+                            <span class="lapses">{word['lapses']}x</span>
+                        </div>
+"""
+        html += """
+                    </div>
+"""
+
+    html += """
+                </div>
+            </div>
         </div>
 
         <div class="stats-grid">
@@ -970,9 +1211,15 @@ def main() -> int:
         print("[dashboard] No cards found")
         return 0
 
+    # Get learning statistics from Anki
+    learning_stats = {"learning_count": 0, "due_today": 0, "struggling_cards": []}
+    if "Anki" in data_source:
+        print("[dashboard] Fetching learning statistics from Anki...")
+        learning_stats = get_learning_stats()
+
     print("[dashboard] Generating HTML dashboard...")
 
-    html = generate_html_dashboard(cards, data_source)
+    html = generate_html_dashboard(cards, data_source, learning_stats)
 
     # Save to iCloud Drive (syncs to iPhone/iPad)
     output_path = BASE / "Portuguese-Dashboard.html"
