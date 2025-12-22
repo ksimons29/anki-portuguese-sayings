@@ -226,10 +226,14 @@ def get_learning_stats(deck_name: str = "Portuguese Mastery (pt-PT)") -> Dict[st
                 fields = note.get("fields", {})
                 word_pt = fields.get("word_pt", {}).get("value", "").strip()
                 word_en = fields.get("word_en", {}).get("value", "").strip()
+                sentence_pt = fields.get("sentence_pt", {}).get("value", "").strip()
+                sentence_en = fields.get("sentence_en", {}).get("value", "").strip()
                 if word_pt and word_en:
                     stats["struggling_cards"].append({
                         "word_pt": word_pt,
                         "word_en": word_en,
+                        "sentence_pt": sentence_pt,
+                        "sentence_en": sentence_en,
                         "lapses": lapses,
                     })
 
@@ -789,6 +793,160 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
             color: #718096;
         }}
 
+        /* Difficult Words Section */
+        .difficult-words-section {{
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border-left: 5px solid #e53e3e;
+        }}
+
+        .difficult-words-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #fed7d7;
+        }}
+
+        .difficult-words-title {{
+            font-size: 1.5em;
+            font-weight: 600;
+            color: #c53030;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }}
+
+        .difficult-words-badge {{
+            background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.9em;
+        }}
+
+        .difficult-words-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+        }}
+
+        .difficult-word-card {{
+            background: #fff5f5;
+            border-radius: 12px;
+            padding: 15px;
+            border: 1px solid #fed7d7;
+            transition: all 0.2s;
+            cursor: pointer;
+        }}
+
+        .difficult-word-card:hover {{
+            background: #fee2e2;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(229, 62, 62, 0.15);
+        }}
+
+        .difficult-word-card.expanded {{
+            background: #fee2e2;
+        }}
+
+        .difficult-word-main {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+        }}
+
+        .difficult-word-text {{
+            flex: 1;
+        }}
+
+        .difficult-word-pt {{
+            font-weight: 700;
+            color: #c53030;
+            font-size: 1.15em;
+            margin-bottom: 3px;
+        }}
+
+        .difficult-word-en {{
+            color: #718096;
+            font-size: 0.95em;
+        }}
+
+        .difficult-word-stats {{
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+        }}
+
+        .fail-count {{
+            background: #e53e3e;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }}
+
+        .fail-label {{
+            font-size: 0.75em;
+            color: #a0aec0;
+            text-transform: uppercase;
+        }}
+
+        .difficult-word-sentences {{
+            display: none;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #fed7d7;
+        }}
+
+        .difficult-word-card.expanded .difficult-word-sentences {{
+            display: block;
+        }}
+
+        .difficult-sentence-pt {{
+            color: #4a5568;
+            font-style: italic;
+            font-size: 0.9em;
+            line-height: 1.5;
+            margin-bottom: 6px;
+        }}
+
+        .difficult-sentence-en {{
+            color: #718096;
+            font-size: 0.85em;
+            line-height: 1.4;
+        }}
+
+        .no-difficult-words {{
+            text-align: center;
+            padding: 40px 20px;
+            color: #48bb78;
+        }}
+
+        .no-difficult-words .icon {{
+            font-size: 3em;
+            margin-bottom: 15px;
+        }}
+
+        .no-difficult-words .message {{
+            font-size: 1.1em;
+            font-weight: 500;
+        }}
+
+        .no-difficult-words .submessage {{
+            font-size: 0.9em;
+            color: #718096;
+            margin-top: 5px;
+        }}
+
         /* Learning Stats Panel (top right) */
         .header-with-stats {{
             display: flex;
@@ -918,6 +1076,14 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
                 align-items: flex-start;
                 gap: 10px;
             }}
+            .difficult-words-grid {{
+                grid-template-columns: 1fr;
+            }}
+            .difficult-words-header {{
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }}
         }}
     </style>
 </head>
@@ -986,6 +1152,63 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
                 <div class="stat-number">{len(sorted_topics)}</div>
                 <div class="stat-label">Categories</div>
             </div>
+        </div>
+
+        <div class="difficult-words-section">
+            <div class="difficult-words-header">
+                <div class="difficult-words-title">⚠️ Words I Find Difficult</div>
+                <div class="difficult-words-badge">{len(learning_stats['struggling_cards'])} words need practice</div>
+            </div>
+"""
+
+    # Generate difficult words
+    if learning_stats['struggling_cards']:
+        html += """
+            <div class="difficult-words-grid">
+"""
+        for word in learning_stats['struggling_cards']:
+            word_pt = word.get("word_pt", "").strip()
+            word_en = word.get("word_en", "").strip()
+            sentence_pt = word.get("sentence_pt", "").strip()
+            sentence_en = word.get("sentence_en", "").strip()
+            lapses = word.get("lapses", 0)
+
+            # Escape HTML entities
+            word_pt_safe = word_pt.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            word_en_safe = word_en.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            sentence_pt_safe = sentence_pt.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            sentence_en_safe = sentence_en.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+            html += f"""
+                <div class="difficult-word-card" onclick="this.classList.toggle('expanded')">
+                    <div class="difficult-word-main">
+                        <div class="difficult-word-text">
+                            <div class="difficult-word-pt">{word_pt_safe}</div>
+                            <div class="difficult-word-en">{word_en_safe}</div>
+                        </div>
+                        <div class="difficult-word-stats">
+                            <span class="fail-count">{lapses}x failed</span>
+                        </div>
+                    </div>
+                    <div class="difficult-word-sentences">
+                        <div class="difficult-sentence-pt">{sentence_pt_safe}</div>
+                        <div class="difficult-sentence-en">{sentence_en_safe}</div>
+                    </div>
+                </div>
+"""
+        html += """
+            </div>
+"""
+    else:
+        html += """
+            <div class="no-difficult-words">
+                <div class="icon">🎉</div>
+                <div class="message">No difficult words!</div>
+                <div class="submessage">You're doing great - no words have 3+ failed reviews</div>
+            </div>
+"""
+
+    html += """
         </div>
 
         <div class="recent-words-section">
