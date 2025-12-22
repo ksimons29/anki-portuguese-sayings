@@ -150,6 +150,105 @@ def anki_invoke(payload: dict) -> dict:
         raise RuntimeError(f"Could not connect to Anki. Is Anki running? Error: {e}")
 
 
+def get_learning_stats(deck_name: str = "Portuguese Mastery (pt-PT)") -> Dict[str, any]:
+    """
+    Get learning statistics from Anki.
+
+    Returns dict with:
+    - learning_count: Cards currently in learning phase
+    - struggling_cards: List of cards with high lapse count (failing often)
+    - due_today: Cards due for review today
+    """
+    stats = {
+        "learning_count": 0,
+        "due_today": 0,
+        "struggling_cards": [],
+    }
+
+    try:
+        # Find all cards in the deck
+        cards_result = anki_invoke({
+            "action": "findCards",
+            "version": 6,
+            "params": {"query": f'deck:"{deck_name}"'}
+        })
+
+        if cards_result.get("error"):
+            print(f"[anki-stats] Error finding cards: {cards_result['error']}")
+            return stats
+
+        card_ids = cards_result.get("result", [])
+        if not card_ids:
+            return stats
+
+        # Get detailed card info
+        cards_info = anki_invoke({
+            "action": "cardsInfo",
+            "version": 6,
+            "params": {"cards": card_ids}
+        })
+
+        if cards_info.get("error"):
+            print(f"[anki-stats] Error getting card info: {cards_info['error']}")
+            return stats
+
+        # Also get notes info for word data
+        note_ids = list(set(c.get("note") for c in cards_info.get("result", []) if c.get("note")))
+        notes_map = {}
+        if note_ids:
+            notes_info = anki_invoke({
+                "action": "notesInfo",
+                "version": 6,
+                "params": {"notes": note_ids}
+            })
+            if not notes_info.get("error"):
+                for note in notes_info.get("result", []):
+                    notes_map[note.get("noteId")] = note
+
+        for card in cards_info.get("result", []):
+            queue = card.get("queue", 0)
+            lapses = card.get("lapses", 0)
+            due = card.get("due", 0)
+            note_id = card.get("note")
+
+            # Queue types:
+            # -1 = suspended, 0 = new, 1 = learning, 2 = review, 3 = day-learn, 4 = preview
+            if queue in (1, 3):  # Learning or day-learn
+                stats["learning_count"] += 1
+
+            # Due today (queue=2 means review, due <= today's day number)
+            if queue == 2:
+                stats["due_today"] += 1
+
+            # Struggling: 3+ lapses
+            if lapses >= 3:
+                note = notes_map.get(note_id, {})
+                fields = note.get("fields", {})
+                word_pt = fields.get("word_pt", {}).get("value", "").strip()
+                word_en = fields.get("word_en", {}).get("value", "").strip()
+                sentence_pt = fields.get("sentence_pt", {}).get("value", "").strip()
+                sentence_en = fields.get("sentence_en", {}).get("value", "").strip()
+                if word_pt and word_en:
+                    stats["struggling_cards"].append({
+                        "word_pt": word_pt,
+                        "word_en": word_en,
+                        "sentence_pt": sentence_pt,
+                        "sentence_en": sentence_en,
+                        "lapses": lapses,
+                    })
+
+        # Sort struggling cards by lapses (most failed first) and limit to top 10
+        stats["struggling_cards"].sort(key=lambda x: x["lapses"], reverse=True)
+        stats["struggling_cards"] = stats["struggling_cards"][:10]
+
+        print(f"[anki-stats] Learning: {stats['learning_count']}, Due: {stats['due_today']}, Struggling: {len(stats['struggling_cards'])}")
+
+    except Exception as e:
+        print(f"[anki-stats] Error fetching stats: {e}")
+
+    return stats
+
+
 def load_cards_from_anki(deck_name: str = "Portuguese Mastery (pt-PT)") -> List[Dict[str, str]]:
     """Load all cards directly from Anki using AnkiConnect."""
     print(f"[anki] Connecting to Anki deck: {deck_name}")
@@ -296,10 +395,13 @@ def load_cards_from_csv() -> List[Dict[str, str]]:
 
 # ===== HTML GENERATION =====
 
-def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Anki") -> str:
+def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Anki", learning_stats: Dict = None) -> str:
     """Generate interactive HTML dashboard."""
     if not cards:
         return "<html><body><h1>No cards found</h1></body></html>"
+
+    if learning_stats is None:
+        learning_stats = {"learning_count": 0, "due_today": 0, "struggling_cards": []}
 
     # Classify cards
     by_topic = defaultdict(list)
@@ -326,6 +428,21 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
         1 for c in cards
         if c.get("date_added") and c["date_added"] >= month_ago.isoformat()
     )
+
+    # Filter cards from the last 2 weeks for the recent words section
+    two_weeks_ago = today - timedelta(days=14)
+    recent_cards = [
+        c for c in cards
+        if c.get("date_added") and c["date_added"] >= two_weeks_ago.isoformat()
+    ]
+    # Sort by date descending
+    recent_cards.sort(key=lambda x: x.get("date_added", ""), reverse=True)
+
+    # Group recent cards by date
+    recent_by_date = defaultdict(list)
+    for card in recent_cards:
+        date = card.get("date_added", "Unknown")
+        recent_by_date[date].append(card)
 
     # Sort topics
     sorted_topics = sorted(by_topic.items(), key=lambda x: len(x[1]), reverse=True)
@@ -546,12 +663,426 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
             transform: rotate(180deg);
         }}
 
+        /* Recent Words Section */
+        .recent-words-section {{
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }}
+
+        .recent-words-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e2e8f0;
+        }}
+
+        .recent-words-title {{
+            font-size: 1.5em;
+            font-weight: 600;
+            color: #2d3748;
+        }}
+
+        .recent-words-badge {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.9em;
+        }}
+
+        .date-group {{
+            margin-bottom: 20px;
+        }}
+
+        .date-group:last-child {{
+            margin-bottom: 0;
+        }}
+
+        .date-label {{
+            font-size: 0.85em;
+            color: #718096;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+            padding-left: 5px;
+        }}
+
+        .words-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 12px;
+        }}
+
+        .word-card {{
+            background: #f7fafc;
+            border-radius: 10px;
+            padding: 12px 15px;
+            border-left: 4px solid #667eea;
+            transition: all 0.2s;
+            cursor: pointer;
+        }}
+
+        .word-card:hover {{
+            background: #edf2f7;
+            transform: translateX(3px);
+        }}
+
+        .word-card.expanded {{
+            background: #edf2f7;
+        }}
+
+        .word-card .word-pair {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }}
+
+        .word-card .pt {{
+            font-weight: 600;
+            color: #2d3748;
+            font-size: 1.05em;
+        }}
+
+        .word-card .arrow {{
+            color: #a0aec0;
+            flex-shrink: 0;
+        }}
+
+        .word-card .en {{
+            color: #667eea;
+            font-size: 0.95em;
+            text-align: right;
+        }}
+
+        .word-card .sentences {{
+            display: none;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #e2e8f0;
+        }}
+
+        .word-card.expanded .sentences {{
+            display: block;
+        }}
+
+        .word-card .sentence-pt {{
+            color: #4a5568;
+            font-style: italic;
+            font-size: 0.9em;
+            line-height: 1.4;
+            margin-bottom: 5px;
+        }}
+
+        .word-card .sentence-en {{
+            color: #718096;
+            font-size: 0.85em;
+            line-height: 1.4;
+        }}
+
+        .no-recent-words {{
+            text-align: center;
+            padding: 30px;
+            color: #718096;
+        }}
+
+        /* Difficult Words Section */
+        .difficult-words-section {{
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border-left: 5px solid #e53e3e;
+        }}
+
+        .difficult-words-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #fed7d7;
+        }}
+
+        .difficult-words-title {{
+            font-size: 1.5em;
+            font-weight: 600;
+            color: #c53030;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }}
+
+        .difficult-words-badge {{
+            background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.9em;
+        }}
+
+        .difficult-words-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+        }}
+
+        .difficult-word-card {{
+            background: #fff5f5;
+            border-radius: 12px;
+            padding: 15px;
+            border: 1px solid #fed7d7;
+            transition: all 0.2s;
+            cursor: pointer;
+        }}
+
+        .difficult-word-card:hover {{
+            background: #fee2e2;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(229, 62, 62, 0.15);
+        }}
+
+        .difficult-word-card.expanded {{
+            background: #fee2e2;
+        }}
+
+        .difficult-word-main {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+        }}
+
+        .difficult-word-text {{
+            flex: 1;
+        }}
+
+        .difficult-word-pt {{
+            font-weight: 700;
+            color: #c53030;
+            font-size: 1.15em;
+            margin-bottom: 3px;
+        }}
+
+        .difficult-word-en {{
+            color: #718096;
+            font-size: 0.95em;
+        }}
+
+        .difficult-word-stats {{
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+        }}
+
+        .fail-count {{
+            background: #e53e3e;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }}
+
+        .fail-label {{
+            font-size: 0.75em;
+            color: #a0aec0;
+            text-transform: uppercase;
+        }}
+
+        .difficult-word-sentences {{
+            display: none;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #fed7d7;
+        }}
+
+        .difficult-word-card.expanded .difficult-word-sentences {{
+            display: block;
+        }}
+
+        .difficult-sentence-pt {{
+            color: #4a5568;
+            font-style: italic;
+            font-size: 0.9em;
+            line-height: 1.5;
+            margin-bottom: 6px;
+        }}
+
+        .difficult-sentence-en {{
+            color: #718096;
+            font-size: 0.85em;
+            line-height: 1.4;
+        }}
+
+        .no-difficult-words {{
+            text-align: center;
+            padding: 40px 20px;
+            color: #48bb78;
+        }}
+
+        .no-difficult-words .icon {{
+            font-size: 3em;
+            margin-bottom: 15px;
+        }}
+
+        .no-difficult-words .message {{
+            font-size: 1.1em;
+            font-weight: 500;
+        }}
+
+        .no-difficult-words .submessage {{
+            font-size: 0.9em;
+            color: #718096;
+            margin-top: 5px;
+        }}
+
+        /* Learning Stats Panel (top right) */
+        .header-with-stats {{
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 30px;
+        }}
+
+        .header-left {{
+            flex: 1;
+        }}
+
+        .learning-stats-panel {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 15px;
+            padding: 20px;
+            min-width: 280px;
+            color: white;
+        }}
+
+        .learning-stats-panel h3 {{
+            font-size: 1.1em;
+            margin-bottom: 15px;
+            opacity: 0.95;
+        }}
+
+        .learning-stat-row {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }}
+
+        .learning-stat-row:last-child {{
+            border-bottom: none;
+        }}
+
+        .learning-stat-label {{
+            font-size: 0.9em;
+            opacity: 0.9;
+        }}
+
+        .learning-stat-value {{
+            font-weight: bold;
+            font-size: 1.2em;
+        }}
+
+        .learning-stat-value.warning {{
+            color: #fbd38d;
+        }}
+
+        .struggling-section {{
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255,255,255,0.3);
+        }}
+
+        .struggling-title {{
+            font-size: 0.85em;
+            opacity: 0.9;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }}
+
+        .struggling-word {{
+            background: rgba(255,255,255,0.15);
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin-bottom: 6px;
+            font-size: 0.9em;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+
+        .struggling-word:last-child {{
+            margin-bottom: 0;
+        }}
+
+        .struggling-word .word {{
+            font-weight: 500;
+        }}
+
+        .struggling-word .lapses {{
+            background: rgba(251, 211, 141, 0.3);
+            color: #fbd38d;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }}
+
         @media (max-width: 768px) {{
             .header h1 {{
                 font-size: 1.8em;
             }}
+            .header-with-stats {{
+                flex-direction: column;
+            }}
+            .learning-stats-panel {{
+                min-width: 100%;
+                order: -1;
+                margin-bottom: 20px;
+            }}
             .stats-grid {{
                 grid-template-columns: 1fr;
+            }}
+            .words-grid {{
+                grid-template-columns: 1fr;
+            }}
+            .word-card .word-pair {{
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 5px;
+            }}
+            .word-card .arrow {{
+                display: none;
+            }}
+            .word-card .en {{
+                text-align: left;
+            }}
+            .recent-words-header {{
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }}
+            .difficult-words-grid {{
+                grid-template-columns: 1fr;
+            }}
+            .difficult-words-header {{
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
             }}
         }}
     </style>
@@ -559,9 +1090,49 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
 <body>
     <div class="container">
         <div class="header">
-            <h1>🇵🇹 Portuguese Learning Dashboard</h1>
-            <p class="subtitle">Last updated: {datetime.now().strftime('%A, %B %d, %Y at %H:%M')}</p>
-            <p class="subtitle" style="margin-top: 5px; font-size: 0.9em;">📊 Data source: <strong>{data_source}</strong></p>
+            <div class="header-with-stats">
+                <div class="header-left">
+                    <h1>🇵🇹 Portuguese Learning Dashboard</h1>
+                    <p class="subtitle">Last updated: {datetime.now().strftime('%A, %B %d, %Y at %H:%M')}</p>
+                    <p class="subtitle" style="margin-top: 5px; font-size: 0.9em;">📊 Data source: <strong>{data_source}</strong></p>
+                </div>
+                <div class="learning-stats-panel">
+                    <h3>📚 Learning Progress</h3>
+                    <div class="learning-stat-row">
+                        <span class="learning-stat-label">Currently Learning</span>
+                        <span class="learning-stat-value">{learning_stats['learning_count']}</span>
+                    </div>
+                    <div class="learning-stat-row">
+                        <span class="learning-stat-label">Due for Review</span>
+                        <span class="learning-stat-value">{learning_stats['due_today']}</span>
+                    </div>
+                    <div class="learning-stat-row">
+                        <span class="learning-stat-label">Need Practice</span>
+                        <span class="learning-stat-value{' warning' if len(learning_stats['struggling_cards']) > 0 else ''}">{len(learning_stats['struggling_cards'])}</span>
+                    </div>
+"""
+
+    # Add struggling words if any
+    if learning_stats['struggling_cards']:
+        html += """
+                    <div class="struggling-section">
+                        <div class="struggling-title">⚠️ Words to Review (3+ fails)</div>
+"""
+        for word in learning_stats['struggling_cards'][:5]:  # Show top 5
+            word_pt_safe = word['word_pt'].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            html += f"""
+                        <div class="struggling-word">
+                            <span class="word">{word_pt_safe}</span>
+                            <span class="lapses">{word['lapses']}x</span>
+                        </div>
+"""
+        html += """
+                    </div>
+"""
+
+    html += """
+                </div>
+            </div>
         </div>
 
         <div class="stats-grid">
@@ -581,6 +1152,131 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
                 <div class="stat-number">{len(sorted_topics)}</div>
                 <div class="stat-label">Categories</div>
             </div>
+        </div>
+
+        <div class="difficult-words-section">
+            <div class="difficult-words-header">
+                <div class="difficult-words-title">⚠️ Words I Find Difficult</div>
+                <div class="difficult-words-badge">{len(learning_stats['struggling_cards'])} words need practice</div>
+            </div>
+"""
+
+    # Generate difficult words
+    if learning_stats['struggling_cards']:
+        html += """
+            <div class="difficult-words-grid">
+"""
+        for word in learning_stats['struggling_cards']:
+            word_pt = word.get("word_pt", "").strip()
+            word_en = word.get("word_en", "").strip()
+            sentence_pt = word.get("sentence_pt", "").strip()
+            sentence_en = word.get("sentence_en", "").strip()
+            lapses = word.get("lapses", 0)
+
+            # Escape HTML entities
+            word_pt_safe = word_pt.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            word_en_safe = word_en.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            sentence_pt_safe = sentence_pt.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            sentence_en_safe = sentence_en.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+            html += f"""
+                <div class="difficult-word-card" onclick="this.classList.toggle('expanded')">
+                    <div class="difficult-word-main">
+                        <div class="difficult-word-text">
+                            <div class="difficult-word-pt">{word_pt_safe}</div>
+                            <div class="difficult-word-en">{word_en_safe}</div>
+                        </div>
+                        <div class="difficult-word-stats">
+                            <span class="fail-count">{lapses}x failed</span>
+                        </div>
+                    </div>
+                    <div class="difficult-word-sentences">
+                        <div class="difficult-sentence-pt">{sentence_pt_safe}</div>
+                        <div class="difficult-sentence-en">{sentence_en_safe}</div>
+                    </div>
+                </div>
+"""
+        html += """
+            </div>
+"""
+    else:
+        html += """
+            <div class="no-difficult-words">
+                <div class="icon">🎉</div>
+                <div class="message">No difficult words!</div>
+                <div class="submessage">You're doing great - no words have 3+ failed reviews</div>
+            </div>
+"""
+
+    html += """
+        </div>
+
+        <div class="recent-words-section">
+            <div class="recent-words-header">
+                <div class="recent-words-title">📅 Recent Words (Last 2 Weeks)</div>
+                <div class="recent-words-badge">{len(recent_cards)} words</div>
+            </div>
+"""
+
+    # Generate recent words grouped by date
+    if recent_cards:
+        sorted_dates = sorted(recent_by_date.keys(), reverse=True)
+        for date in sorted_dates:
+            date_cards = recent_by_date[date]
+            # Format the date nicely
+            try:
+                date_obj = datetime.strptime(date, "%Y-%m-%d")
+                if date == today.isoformat():
+                    formatted_date = "Today"
+                elif date == (today - timedelta(days=1)).isoformat():
+                    formatted_date = "Yesterday"
+                else:
+                    formatted_date = date_obj.strftime("%A, %B %d")
+            except:
+                formatted_date = date
+
+            html += f"""
+            <div class="date-group">
+                <div class="date-label">{formatted_date} ({len(date_cards)} words)</div>
+                <div class="words-grid">
+"""
+            for card in date_cards:
+                word_pt = card.get("word_pt", "").strip()
+                word_en = card.get("word_en", "").strip()
+                sentence_pt = card.get("sentence_pt", "").strip()
+                sentence_en = card.get("sentence_en", "").strip()
+
+                # Escape HTML entities
+                word_pt_safe = word_pt.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                word_en_safe = word_en.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                sentence_pt_safe = sentence_pt.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                sentence_en_safe = sentence_en.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+                html += f"""
+                    <div class="word-card" onclick="this.classList.toggle('expanded')">
+                        <div class="word-pair">
+                            <span class="pt">{word_pt_safe}</span>
+                            <span class="arrow">→</span>
+                            <span class="en">{word_en_safe}</span>
+                        </div>
+                        <div class="sentences">
+                            <div class="sentence-pt">{sentence_pt_safe}</div>
+                            <div class="sentence-en">{sentence_en_safe}</div>
+                        </div>
+                    </div>
+"""
+            html += """
+                </div>
+            </div>
+"""
+    else:
+        html += """
+            <div class="no-recent-words">
+                No words added in the last 2 weeks. Keep learning! 📚
+            </div>
+"""
+
+    html += """
         </div>
 
         <div class="search-box">
@@ -738,9 +1434,15 @@ def main() -> int:
         print("[dashboard] No cards found")
         return 0
 
+    # Get learning statistics from Anki
+    learning_stats = {"learning_count": 0, "due_today": 0, "struggling_cards": []}
+    if "Anki" in data_source:
+        print("[dashboard] Fetching learning statistics from Anki...")
+        learning_stats = get_learning_stats()
+
     print("[dashboard] Generating HTML dashboard...")
 
-    html = generate_html_dashboard(cards, data_source)
+    html = generate_html_dashboard(cards, data_source, learning_stats)
 
     # Save to iCloud Drive (syncs to iPhone/iPad)
     output_path = BASE / "Portuguese-Dashboard.html"
