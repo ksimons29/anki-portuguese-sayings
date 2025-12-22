@@ -1170,6 +1170,12 @@ Common issues:
 ---
 
 ## 🗒️ Changelog
+- **2025-12-22**
+  - **Dashboard cache fix**
+    - Added cache-control meta headers to prevent browser caching
+    - Fixes issue where refreshing dashboard showed stale/old content
+    - Headers: `Cache-Control: no-cache, no-store, must-revalidate`, `Pragma: no-cache`, `Expires: 0`
+
 - **2025-12-17**
   - **Unified Transcribe Script** (`unified_transcribe.py`)
     - Combined YouTube download + audio transcription into single script
