@@ -19,6 +19,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Tuple
 import csv
+import glob
 import os
 import subprocess
 import sys
@@ -470,9 +471,6 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
     <title>🇵🇹 Portuguese Learning Dashboard</title>
     <style>
         * {{
@@ -1591,6 +1589,26 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
     return html
 
 
+# ===== CLEANUP =====
+
+def cleanup_old_dashboards(directory: Path, pattern: str, keep: int = 3) -> None:
+    """Remove old dashboard files, keeping the most recent ones.
+
+    Args:
+        directory: Directory containing the dashboard files
+        pattern: Glob pattern to match dashboard files (e.g., "Portuguese-Dashboard-*.html")
+        keep: Number of most recent files to keep (default: 3)
+    """
+    old_files = sorted(glob.glob(str(directory / pattern)))
+    files_to_remove = old_files[:-keep] if len(old_files) > keep else []
+    for old_file in files_to_remove:
+        try:
+            os.remove(old_file)
+            print(f"[dashboard] Cleaned up old file: {Path(old_file).name}")
+        except OSError as e:
+            print(f"[dashboard] Could not remove {old_file}: {e}")
+
+
 # ===== MAIN =====
 
 def main() -> int:
@@ -1614,11 +1632,20 @@ def main() -> int:
 
     html = generate_html_dashboard(cards, data_source, learning_stats)
 
-    # Save to iCloud Drive (syncs to iPhone/iPad)
-    output_path = BASE / "Portuguese-Dashboard.html"
+    # Generate unique filename with timestamp to bust browser cache
+    # Each new file = new cache entry = guaranteed fresh content
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f"Portuguese-Dashboard-{timestamp}.html"
 
-    # Also create a Desktop shortcut for easy Mac access
-    desktop_path = Path.home() / "Desktop" / "Portuguese-Dashboard.html"
+    # Clean up old dashboard files before creating new ones (keep last 3)
+    cleanup_old_dashboards(BASE, "Portuguese-Dashboard-*.html", keep=3)
+    cleanup_old_dashboards(Path.home() / "Desktop", "Portuguese-Dashboard-*.html", keep=3)
+
+    # Save to iCloud Drive (syncs to iPhone/iPad)
+    output_path = BASE / filename
+
+    # Also create a Desktop copy for easy Mac access
+    desktop_path = Path.home() / "Desktop" / filename
 
     with output_path.open("w", encoding="utf-8") as f:
         f.write(html)
@@ -1642,7 +1669,7 @@ def main() -> int:
         print(f"[dashboard] Manually open: {output_path}")
 
     print(f"\n[dashboard] 📱 Access on iPhone/iPad:")
-    print(f"[dashboard]    Files app → iCloud Drive → Portuguese → Anki → Portuguese-Dashboard.html")
+    print(f"[dashboard]    Files app → iCloud Drive → Portuguese → Anki → {filename}")
 
     return 0
 

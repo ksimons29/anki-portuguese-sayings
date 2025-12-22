@@ -1171,10 +1171,12 @@ Common issues:
 
 ## 🗒️ Changelog
 - **2025-12-22**
-  - **Dashboard cache fix**
-    - Added cache-control meta headers to prevent browser caching
-    - Fixes issue where refreshing dashboard showed stale/old content
-    - Headers: `Cache-Control: no-cache, no-store, must-revalidate`, `Pragma: no-cache`, `Expires: 0`
+  - **Dashboard cache fix (v2 - proper fix)**
+    - Changed to timestamped filenames: `Portuguese-Dashboard-YYYYMMDD_HHMMSS.html`
+    - Each generation creates a unique file = guaranteed fresh content in browser
+    - Added auto-cleanup of old dashboard files (keeps last 3)
+    - Removed ineffective meta http-equiv tags (don't work for `file://` protocol)
+    - Works on Chrome, Safari, and all browsers on macOS/iOS
 
 - **2025-12-17**
   - **Unified Transcribe Script** (`unified_transcribe.py`)
