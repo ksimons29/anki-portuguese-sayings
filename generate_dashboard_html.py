@@ -156,12 +156,14 @@ def get_learning_stats(deck_name: str = "Portuguese Mastery (pt-PT)") -> Dict[st
 
     Returns dict with:
     - learning_count: Cards currently in learning phase
+    - learning_cards: List of cards currently being learned
     - struggling_cards: List of cards with high lapse count (failing often)
     - due_today: Cards due for review today
     """
     stats = {
         "learning_count": 0,
         "due_today": 0,
+        "learning_cards": [],
         "struggling_cards": [],
     }
 
@@ -215,6 +217,21 @@ def get_learning_stats(deck_name: str = "Portuguese Mastery (pt-PT)") -> Dict[st
             # -1 = suspended, 0 = new, 1 = learning, 2 = review, 3 = day-learn, 4 = preview
             if queue in (1, 3):  # Learning or day-learn
                 stats["learning_count"] += 1
+                # Also capture the card data for display
+                note = notes_map.get(note_id, {})
+                fields = note.get("fields", {})
+                word_pt = fields.get("word_pt", {}).get("value", "").strip()
+                word_en = fields.get("word_en", {}).get("value", "").strip()
+                sentence_pt = fields.get("sentence_pt", {}).get("value", "").strip()
+                sentence_en = fields.get("sentence_en", {}).get("value", "").strip()
+                if word_pt and word_en:
+                    stats["learning_cards"].append({
+                        "word_pt": word_pt,
+                        "word_en": word_en,
+                        "sentence_pt": sentence_pt,
+                        "sentence_en": sentence_en,
+                        "queue": queue,
+                    })
 
             # Due today (queue=2 means review, due <= today's day number)
             if queue == 2:
@@ -241,7 +258,7 @@ def get_learning_stats(deck_name: str = "Portuguese Mastery (pt-PT)") -> Dict[st
         stats["struggling_cards"].sort(key=lambda x: x["lapses"], reverse=True)
         stats["struggling_cards"] = stats["struggling_cards"][:10]
 
-        print(f"[anki-stats] Learning: {stats['learning_count']}, Due: {stats['due_today']}, Struggling: {len(stats['struggling_cards'])}")
+        print(f"[anki-stats] Learning: {stats['learning_count']}, Due: {stats['due_today']}, Struggling: {len(stats['struggling_cards'])}, Learning cards: {len(stats['learning_cards'])}")
 
     except Exception as e:
         print(f"[anki-stats] Error fetching stats: {e}")
@@ -401,7 +418,7 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
         return "<html><body><h1>No cards found</h1></body></html>"
 
     if learning_stats is None:
-        learning_stats = {"learning_count": 0, "due_today": 0, "struggling_cards": []}
+        learning_stats = {"learning_count": 0, "due_today": 0, "learning_cards": [], "struggling_cards": []}
 
     # Classify cards
     by_topic = defaultdict(list)
@@ -947,6 +964,104 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
             margin-top: 5px;
         }}
 
+        /* Subsection headers in difficult words */
+        .subsection-header {{
+            font-size: 1.1em;
+            font-weight: 600;
+            margin: 20px 0 15px 0;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+
+        .subsection-header:first-of-type {{
+            margin-top: 0;
+        }}
+
+        .subsection-header.learning {{
+            color: #5a67d8;
+        }}
+
+        .subsection-header.struggling {{
+            color: #c53030;
+        }}
+
+        .subsection-count {{
+            background: #e2e8f0;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            color: #4a5568;
+        }}
+
+        /* Learning cards (blue theme) */
+        .learning-word-card {{
+            background: #ebf4ff;
+            border-radius: 12px;
+            padding: 15px;
+            border: 1px solid #c3dafe;
+            transition: all 0.2s;
+            cursor: pointer;
+        }}
+
+        .learning-word-card:hover {{
+            background: #dbeafe;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(90, 103, 216, 0.15);
+        }}
+
+        .learning-word-card.expanded {{
+            background: #dbeafe;
+        }}
+
+        .learning-word-pt {{
+            font-weight: 700;
+            color: #5a67d8;
+            font-size: 1.15em;
+            margin-bottom: 3px;
+        }}
+
+        .learning-word-en {{
+            color: #718096;
+            font-size: 0.95em;
+        }}
+
+        .learning-badge {{
+            background: #5a67d8;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }}
+
+        .learning-word-sentences {{
+            display: none;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #c3dafe;
+        }}
+
+        .learning-word-card.expanded .learning-word-sentences {{
+            display: block;
+        }}
+
+        .learning-sentence-pt {{
+            color: #4a5568;
+            font-style: italic;
+            font-size: 0.9em;
+            line-height: 1.5;
+            margin-bottom: 6px;
+        }}
+
+        .learning-sentence-en {{
+            color: #718096;
+            font-size: 0.85em;
+            line-height: 1.4;
+        }}
+
         /* Learning Stats Panel (top right) */
         .header-with-stats {{
             display: flex;
@@ -1156,14 +1271,64 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
 
         <div class="difficult-words-section">
             <div class="difficult-words-header">
-                <div class="difficult-words-title">⚠️ Words I Find Difficult</div>
-                <div class="difficult-words-badge">{len(learning_stats['struggling_cards'])} words need practice</div>
+                <div class="difficult-words-title">📖 Words Overview</div>
+                <div class="difficult-words-badge">{len(learning_stats['learning_cards']) + len(learning_stats['struggling_cards'])} words to focus on</div>
             </div>
 """
 
-    # Generate difficult words
-    if learning_stats['struggling_cards']:
+    # Calculate totals
+    has_learning = len(learning_stats['learning_cards']) > 0
+    has_struggling = len(learning_stats['struggling_cards']) > 0
+
+    # Show learning cards first (currently being studied)
+    if has_learning:
+        html += f"""
+            <div class="subsection-header learning">
+                📚 Currently Learning
+                <span class="subsection-count">{len(learning_stats['learning_cards'])} words</span>
+            </div>
+            <div class="difficult-words-grid">
+"""
+        for word in learning_stats['learning_cards']:
+            word_pt = word.get("word_pt", "").strip()
+            word_en = word.get("word_en", "").strip()
+            sentence_pt = word.get("sentence_pt", "").strip()
+            sentence_en = word.get("sentence_en", "").strip()
+
+            # Escape HTML entities
+            word_pt_safe = word_pt.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            word_en_safe = word_en.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            sentence_pt_safe = sentence_pt.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            sentence_en_safe = sentence_en.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+            html += f"""
+                <div class="learning-word-card" onclick="this.classList.toggle('expanded')">
+                    <div class="difficult-word-main">
+                        <div class="difficult-word-text">
+                            <div class="learning-word-pt">{word_pt_safe}</div>
+                            <div class="learning-word-en">{word_en_safe}</div>
+                        </div>
+                        <div class="difficult-word-stats">
+                            <span class="learning-badge">Learning</span>
+                        </div>
+                    </div>
+                    <div class="learning-word-sentences">
+                        <div class="learning-sentence-pt">{sentence_pt_safe}</div>
+                        <div class="learning-sentence-en">{sentence_en_safe}</div>
+                    </div>
+                </div>
+"""
         html += """
+            </div>
+"""
+
+    # Show struggling cards (failed 3+ times)
+    if has_struggling:
+        html += f"""
+            <div class="subsection-header struggling">
+                ⚠️ Need More Practice
+                <span class="subsection-count">{len(learning_stats['struggling_cards'])} words</span>
+            </div>
             <div class="difficult-words-grid">
 """
         for word in learning_stats['struggling_cards']:
@@ -1199,12 +1364,14 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
         html += """
             </div>
 """
-    else:
+
+    # Show message if nothing to show
+    if not has_learning and not has_struggling:
         html += """
             <div class="no-difficult-words">
                 <div class="icon">🎉</div>
-                <div class="message">No difficult words!</div>
-                <div class="submessage">You're doing great - no words have 3+ failed reviews</div>
+                <div class="message">All caught up!</div>
+                <div class="submessage">No words currently in learning phase and no struggling words</div>
             </div>
 """
 
