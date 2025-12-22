@@ -1130,7 +1130,7 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
                     </div>
 """
 
-    html += """
+    html += f"""
                 </div>
             </div>
         </div>
@@ -1208,7 +1208,7 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
             </div>
 """
 
-    html += """
+    html += f"""
         </div>
 
         <div class="recent-words-section">
