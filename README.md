@@ -1170,6 +1170,48 @@ Common issues:
 ---
 
 ## 🗒️ Changelog
+- **2026-01-07**
+  - **Dashboard "Words Overview" major enhancement**
+    - **Added NEW cards tracking** (queue 0) - previously invisible cards are now shown
+      - Shows recently added words that haven't been studied yet
+      - Displays 20 most recent new cards with green styling
+      - Sorted by date (newest first)
+    - **Fixed "0 words to focus on" bug** - was ignoring 283 new cards
+      - Words Overview now tracks: New Cards (queue 0) + Learning (queue 1/3) + Need Practice (lapses ≥ 1)
+      - Previously only tracked Learning + Struggling, missing all new cards
+    - **Changed "Need Practice" threshold from 3+ to 1+ lapses**
+      - Now shows cards failed even once (marked "Again" during reviews)
+      - More sensitive to struggling cards - catch issues earlier
+      - Previous threshold (3+ failures) was too strict
+      - Helps identify cards that need attention before they become chronic problems
+    - **Interactive CSS tooltips** for better user understanding
+      - Hover over "words to focus on" badge shows inclusion rules
+      - Hover over Learning Progress stats shows detailed explanations
+      - Custom CSS tooltips (not HTML `title`) for reliable cross-browser display
+      - Added `cursor: help` styling to indicate hoverable elements
+    - **Fixed "Due for Review" calculation**
+      - Now uses Anki's `is:due` query for accurate count
+      - Previously counted ALL review cards (437) instead of cards due today (99)
+      - More accurate representation of daily workload
+    - **Compact side-by-side layout** - eliminated white space
+      - Learning Progress panel (left 1/3) next to Words Overview (right 2/3)
+      - Reduced header padding: 40px → 30px vertical
+      - Reduced section margins: 30px → 20px between panels
+      - Reduced subsection spacing: 20px/15px → 15px/10px
+      - More efficient use of screen space - less scrolling required
+      - Responsive design: stacks vertically on screens < 1000px
+    - **Learning Progress panel split into 2 columns**
+      - Left column: Currently Learning + Due for Review
+      - Right column: Need Practice
+      - Each stat gets individual card with hover effect
+      - Background styling with rounded corners for each stat row
+    - **UI improvements**
+      - New cards section with ✨ icon and green theme
+      - Three distinct visual themes: Green (new), Blue (learning), Red (struggling)
+      - All sections are expandable with click-to-reveal sentences
+      - Clear subsection headers with word counts
+      - Fail count badge shows "1x failed", "2x failed", etc.
+
 - **2025-12-22**
   - **Dashboard cache fix (v2 - proper fix)**
     - Changed to timestamped filenames: `Portuguese-Dashboard-YYYYMMDD_HHMMSS.html`

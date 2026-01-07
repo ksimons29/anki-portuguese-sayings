@@ -160,12 +160,14 @@ def get_learning_stats(deck_name: str = "Portuguese Mastery (pt-PT)") -> Dict[st
     - learning_cards: List of cards currently being learned
     - struggling_cards: List of cards with high lapse count (failing often)
     - due_today: Cards due for review today
+    - new_cards: List of cards not yet studied (queue 0)
     """
     stats = {
         "learning_count": 0,
         "due_today": 0,
         "learning_cards": [],
         "struggling_cards": [],
+        "new_cards": [],
     }
 
     try:
@@ -183,6 +185,16 @@ def get_learning_stats(deck_name: str = "Portuguese Mastery (pt-PT)") -> Dict[st
         card_ids = cards_result.get("result", [])
         if not card_ids:
             return stats
+
+        # Also find cards due today specifically using Anki's is:due query
+        due_today_result = anki_invoke({
+            "action": "findCards",
+            "version": 6,
+            "params": {"query": f'deck:"{deck_name}" is:due'}
+        })
+
+        due_today_ids = set(due_today_result.get("result", []))
+        stats["due_today"] = len(due_today_ids)
 
         # Get detailed card info
         cards_info = anki_invoke({
@@ -216,7 +228,26 @@ def get_learning_stats(deck_name: str = "Portuguese Mastery (pt-PT)") -> Dict[st
 
             # Queue types:
             # -1 = suspended, 0 = new, 1 = learning, 2 = review, 3 = day-learn, 4 = preview
-            if queue in (1, 3):  # Learning or day-learn
+
+            # New cards (not yet studied)
+            if queue == 0:
+                note = notes_map.get(note_id, {})
+                fields = note.get("fields", {})
+                word_pt = fields.get("word_pt", {}).get("value", "").strip()
+                word_en = fields.get("word_en", {}).get("value", "").strip()
+                sentence_pt = fields.get("sentence_pt", {}).get("value", "").strip()
+                sentence_en = fields.get("sentence_en", {}).get("value", "").strip()
+                if word_pt and word_en:
+                    stats["new_cards"].append({
+                        "word_pt": word_pt,
+                        "word_en": word_en,
+                        "sentence_pt": sentence_pt,
+                        "sentence_en": sentence_en,
+                        "note_id": note_id,
+                    })
+
+            # Learning or day-learn cards
+            if queue in (1, 3):
                 stats["learning_count"] += 1
                 # Also capture the card data for display
                 note = notes_map.get(note_id, {})
@@ -234,12 +265,10 @@ def get_learning_stats(deck_name: str = "Portuguese Mastery (pt-PT)") -> Dict[st
                         "queue": queue,
                     })
 
-            # Due today (queue=2 means review, due <= today's day number)
-            if queue == 2:
-                stats["due_today"] += 1
-
-            # Struggling: 3+ lapses
-            if lapses >= 3:
+            # Struggling: ANY lapses (1+)
+            # A lapse occurs when you press "Again" on a review card
+            # If you failed it even once, it's worth reviewing
+            if lapses >= 1:
                 note = notes_map.get(note_id, {})
                 fields = note.get("fields", {})
                 word_pt = fields.get("word_pt", {}).get("value", "").strip()
@@ -259,7 +288,10 @@ def get_learning_stats(deck_name: str = "Portuguese Mastery (pt-PT)") -> Dict[st
         stats["struggling_cards"].sort(key=lambda x: x["lapses"], reverse=True)
         stats["struggling_cards"] = stats["struggling_cards"][:10]
 
-        print(f"[anki-stats] Learning: {stats['learning_count']}, Due: {stats['due_today']}, Struggling: {len(stats['struggling_cards'])}, Learning cards: {len(stats['learning_cards'])}")
+        # Sort new cards by note_id (timestamp) descending to show newest first
+        stats["new_cards"].sort(key=lambda x: x.get("note_id", 0), reverse=True)
+
+        print(f"[anki-stats] Learning: {stats['learning_count']}, Due: {stats['due_today']}, Struggling: {len(stats['struggling_cards'])}, New: {len(stats['new_cards'])}")
 
     except Exception as e:
         print(f"[anki-stats] Error fetching stats: {e}")
@@ -419,7 +451,7 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
         return "<html><body><h1>No cards found</h1></body></html>"
 
     if learning_stats is None:
-        learning_stats = {"learning_count": 0, "due_today": 0, "learning_cards": [], "struggling_cards": []}
+        learning_stats = {"learning_count": 0, "due_today": 0, "learning_cards": [], "struggling_cards": [], "new_cards": []}
 
     # Classify cards
     by_topic = defaultdict(list)
@@ -494,8 +526,8 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
         .header {{
             background: white;
             border-radius: 20px;
-            padding: 40px;
-            margin-bottom: 30px;
+            padding: 30px 40px;
+            margin-bottom: 20px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.1);
         }}
 
@@ -815,18 +847,21 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
         .difficult-words-section {{
             background: white;
             border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 30px;
+            padding: 20px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
             border-left: 5px solid #e53e3e;
+        }}
+
+        .top-panels-wrapper .difficult-words-section {{
+            margin-bottom: 0;
         }}
 
         .difficult-words-header {{
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
             border-bottom: 2px solid #fed7d7;
         }}
 
@@ -969,8 +1004,8 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
         .subsection-header {{
             font-size: 1.1em;
             font-weight: 600;
-            margin: 20px 0 15px 0;
-            padding-bottom: 10px;
+            margin: 15px 0 10px 0;
+            padding-bottom: 8px;
             border-bottom: 1px solid #e2e8f0;
             display: flex;
             align-items: center;
@@ -979,6 +1014,10 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
 
         .subsection-header:first-of-type {{
             margin-top: 0;
+        }}
+
+        .subsection-header.new {{
+            color: #38a169;
         }}
 
         .subsection-header.learning {{
@@ -1063,23 +1102,84 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
             line-height: 1.4;
         }}
 
-        /* Learning Stats Panel (top right) */
-        .header-with-stats {{
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 30px;
+        /* New cards (green theme) */
+        .new-word-card {{
+            background: #f0fff4;
+            border-radius: 12px;
+            padding: 15px;
+            border: 1px solid #9ae6b4;
+            transition: all 0.2s;
+            cursor: pointer;
         }}
 
-        .header-left {{
-            flex: 1;
+        .new-word-card:hover {{
+            background: #c6f6d5;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(56, 161, 105, 0.15);
+        }}
+
+        .new-word-card.expanded {{
+            background: #c6f6d5;
+        }}
+
+        .new-word-pt {{
+            font-weight: 700;
+            color: #38a169;
+            font-size: 1.15em;
+            margin-bottom: 3px;
+        }}
+
+        .new-word-en {{
+            color: #718096;
+            font-size: 0.95em;
+        }}
+
+        .new-badge {{
+            background: #38a169;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }}
+
+        .new-word-sentences {{
+            display: none;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #9ae6b4;
+        }}
+
+        .new-word-card.expanded .new-word-sentences {{
+            display: block;
+        }}
+
+        .new-sentence-pt {{
+            color: #4a5568;
+            font-style: italic;
+            font-size: 0.9em;
+            line-height: 1.5;
+            margin-bottom: 6px;
+        }}
+
+        .new-sentence-en {{
+            color: #718096;
+            font-size: 0.85em;
+            line-height: 1.4;
+        }}
+
+        /* Learning Stats Panel & Words Overview - side by side */
+        .top-panels-wrapper {{
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 20px;
+            margin-bottom: 20px;
         }}
 
         .learning-stats-panel {{
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border-radius: 15px;
             padding: 20px;
-            min-width: 280px;
             color: white;
         }}
 
@@ -1089,16 +1189,82 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
             opacity: 0.95;
         }}
 
+        .learning-stats-grid {{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }}
+
+        .learning-stat-column {{
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }}
+
         .learning-stat-row {{
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 8px 0;
-            border-bottom: 1px solid rgba(255,255,255,0.2);
+            padding: 10px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            cursor: help;
+            position: relative;
         }}
 
-        .learning-stat-row:last-child {{
-            border-bottom: none;
+        .learning-stat-row:hover {{
+            background: rgba(255,255,255,0.15);
+        }}
+
+        .difficult-words-badge {{
+            cursor: help;
+            position: relative;
+        }}
+
+        .difficult-words-badge:hover::after {{
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #2d3748;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 0.85em;
+            white-space: pre-line;
+            width: 320px;
+            margin-bottom: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 1000;
+            line-height: 1.5;
+        }}
+
+        .difficult-words-badge:hover::before {{
+            content: '';
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-top-color: #2d3748;
+            margin-bottom: 2px;
+        }}
+
+        .learning-stat-row:hover::after {{
+            content: attr(data-tooltip);
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: rgba(45, 55, 72, 0.95);
+            color: white;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 0.8em;
+            white-space: nowrap;
+            margin-top: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 1000;
         }}
 
         .learning-stat-label {{
@@ -1158,17 +1324,21 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
             font-weight: 600;
         }}
 
+        @media (max-width: 1000px) {{
+            .top-panels-wrapper {{
+                grid-template-columns: 1fr;
+            }}
+            .learning-stats-grid {{
+                grid-template-columns: 1fr 1fr;
+            }}
+        }}
+
         @media (max-width: 768px) {{
             .header h1 {{
                 font-size: 1.8em;
             }}
-            .header-with-stats {{
-                flex-direction: column;
-            }}
-            .learning-stats-panel {{
-                min-width: 100%;
-                order: -1;
-                margin-bottom: 20px;
+            .learning-stats-grid {{
+                grid-template-columns: 1fr;
             }}
             .stats-grid {{
                 grid-template-columns: 1fr;
@@ -1206,26 +1376,32 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
 <body>
     <div class="container">
         <div class="header">
-            <div class="header-with-stats">
-                <div class="header-left">
-                    <h1>🇵🇹 Portuguese Learning Dashboard</h1>
-                    <p class="subtitle">Last updated: {datetime.now().strftime('%A, %B %d, %Y at %H:%M')}</p>
-                    <p class="subtitle" style="margin-top: 5px; font-size: 0.9em;">📊 Data source: <strong>{data_source}</strong></p>
+            <h1>🇵🇹 Portuguese Learning Dashboard</h1>
+            <p class="subtitle">Last updated: {datetime.now().strftime('%A, %B %d, %Y at %H:%M')}</p>
+            <p class="subtitle" style="margin-top: 5px; font-size: 0.9em;">📊 Data source: <strong>{data_source}</strong></p>
+        </div>
+
+        <div class="top-panels-wrapper">
+            <div class="learning-stats-panel">
+                <h3>📚 Learning Progress</h3>
+                <div class="learning-stats-grid">
+                    <div class="learning-stat-column">
+                        <div class="learning-stat-row" data-tooltip="Cards in active learning (queue 1 or 3)">
+                            <span class="learning-stat-label">Currently Learning</span>
+                            <span class="learning-stat-value">{learning_stats['learning_count']}</span>
+                        </div>
+                        <div class="learning-stat-row" data-tooltip="Cards due for review today (is:due query)">
+                            <span class="learning-stat-label">Due for Review</span>
+                            <span class="learning-stat-value">{learning_stats['due_today']}</span>
+                        </div>
+                    </div>
+                    <div class="learning-stat-column">
+                        <div class="learning-stat-row" data-tooltip="Cards with failures (pressed 'Again' during reviews)">
+                            <span class="learning-stat-label">Need Practice</span>
+                            <span class="learning-stat-value{' warning' if len(learning_stats['struggling_cards']) > 0 else ''}">{len(learning_stats['struggling_cards'])}</span>
+                        </div>
+                    </div>
                 </div>
-                <div class="learning-stats-panel">
-                    <h3>📚 Learning Progress</h3>
-                    <div class="learning-stat-row">
-                        <span class="learning-stat-label">Currently Learning</span>
-                        <span class="learning-stat-value">{learning_stats['learning_count']}</span>
-                    </div>
-                    <div class="learning-stat-row">
-                        <span class="learning-stat-label">Due for Review</span>
-                        <span class="learning-stat-value">{learning_stats['due_today']}</span>
-                    </div>
-                    <div class="learning-stat-row">
-                        <span class="learning-stat-label">Need Practice</span>
-                        <span class="learning-stat-value{' warning' if len(learning_stats['struggling_cards']) > 0 else ''}">{len(learning_stats['struggling_cards'])}</span>
-                    </div>
 """
 
     # Add struggling words if any
@@ -1247,41 +1423,69 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
 """
 
     html += f"""
-                </div>
             </div>
-        </div>
 
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-number">{total}</div>
-                <div class="stat-label">Total Cards</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">{this_week}</div>
-                <div class="stat-label">This Week</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">{this_month}</div>
-                <div class="stat-label">This Month</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">{len(sorted_topics)}</div>
-                <div class="stat-label">Categories</div>
-            </div>
-        </div>
-
-        <div class="difficult-words-section">
+            <div class="difficult-words-section">
             <div class="difficult-words-header">
                 <div class="difficult-words-title">📖 Words Overview</div>
-                <div class="difficult-words-badge">{len(learning_stats['learning_cards']) + len(learning_stats['struggling_cards'])} words to focus on</div>
+                <div class="difficult-words-badge" data-tooltip="Includes cards that need attention:
+• New Cards (queue 0) - Not yet studied
+• Learning (queue 1/3) - Being learned
+• Need Practice (1+ lapses) - Failed at least once
+
+Excludes: Review cards with no failures">{len(learning_stats['new_cards']) + len(learning_stats['learning_cards']) + len(learning_stats['struggling_cards'])} words to focus on</div>
             </div>
 """
 
     # Calculate totals
+    has_new = len(learning_stats['new_cards']) > 0
     has_learning = len(learning_stats['learning_cards']) > 0
     has_struggling = len(learning_stats['struggling_cards']) > 0
 
-    # Show learning cards first (currently being studied)
+    # Show new cards first (not yet studied) - limit to 20 most recent
+    if has_new:
+        display_new_cards = learning_stats['new_cards'][:20]
+        html += f"""
+            <div class="subsection-header new">
+                ✨ New Cards (Not Yet Studied)
+                <span class="subsection-count">{len(learning_stats['new_cards'])} total ({len(display_new_cards)} shown)</span>
+            </div>
+            <div class="difficult-words-grid">
+"""
+        for word in display_new_cards:
+            word_pt = word.get("word_pt", "").strip()
+            word_en = word.get("word_en", "").strip()
+            sentence_pt = word.get("sentence_pt", "").strip()
+            sentence_en = word.get("sentence_en", "").strip()
+
+            # Escape HTML entities
+            word_pt_safe = word_pt.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            word_en_safe = word_en.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            sentence_pt_safe = sentence_pt.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            sentence_en_safe = sentence_en.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+            html += f"""
+                <div class="new-word-card" onclick="this.classList.toggle('expanded')">
+                    <div class="difficult-word-main">
+                        <div class="difficult-word-text">
+                            <div class="new-word-pt">{word_pt_safe}</div>
+                            <div class="new-word-en">{word_en_safe}</div>
+                        </div>
+                        <div class="difficult-word-stats">
+                            <span class="new-badge">New</span>
+                        </div>
+                    </div>
+                    <div class="new-word-sentences">
+                        <div class="new-sentence-pt">{sentence_pt_safe}</div>
+                        <div class="new-sentence-en">{sentence_en_safe}</div>
+                    </div>
+                </div>
+"""
+        html += """
+            </div>
+"""
+
+    # Show learning cards (currently being studied)
     if has_learning:
         html += f"""
             <div class="subsection-header learning">
@@ -1323,7 +1527,7 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
             </div>
 """
 
-    # Show struggling cards (failed 3+ times)
+    # Show struggling cards (failed 1+ times - pressed "Again" at least once)
     if has_struggling:
         html += f"""
             <div class="subsection-header struggling">
@@ -1367,16 +1571,36 @@ def generate_html_dashboard(cards: List[Dict[str, str]], data_source: str = "Ank
 """
 
     # Show message if nothing to show
-    if not has_learning and not has_struggling:
+    if not has_new and not has_learning and not has_struggling:
         html += """
             <div class="no-difficult-words">
                 <div class="icon">🎉</div>
                 <div class="message">All caught up!</div>
-                <div class="submessage">No words currently in learning phase and no struggling words</div>
+                <div class="submessage">No new cards, no words currently in learning phase, and no struggling words</div>
             </div>
 """
 
     html += f"""
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number">{total}</div>
+                <div class="stat-label">Total Cards</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{this_week}</div>
+                <div class="stat-label">This Week</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{this_month}</div>
+                <div class="stat-label">This Month</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{len(sorted_topics)}</div>
+                <div class="stat-label">Categories</div>
+            </div>
         </div>
 
         <div class="recent-words-section">
@@ -1623,7 +1847,7 @@ def main() -> int:
         return 0
 
     # Get learning statistics from Anki
-    learning_stats = {"learning_count": 0, "due_today": 0, "struggling_cards": []}
+    learning_stats = {"learning_count": 0, "due_today": 0, "learning_cards": [], "struggling_cards": [], "new_cards": []}
     if "Anki" in data_source:
         print("[dashboard] Fetching learning statistics from Anki...")
         learning_stats = get_learning_stats()
