@@ -19,6 +19,37 @@ A clean, end-to-end pipeline that turns quick notes on your **iPhone, iPad, or M
 
 ---
 
+## 🚀 Deployment & Development
+
+**⚠️ IMPORTANT**: This repository is the **source of truth** for all code.
+
+- **Edit code here**: `~/anki-portuguese-sayings/`
+- **Run scripts from**: `~/anki-tools/` (symlinked to this repo)
+- **Deploy changes**: `./deploy.sh` (creates/updates symlinks)
+
+See **[DEPLOYMENT.md](DEPLOYMENT.md)** for full workflow and troubleshooting.
+
+**Quick workflow:**
+```bash
+# 1. Make changes in this repo
+cd ~/anki-portuguese-sayings
+vim generate_dashboard_html.py
+
+# 2. Test changes
+cd ~/anki-tools && source .venv/bin/activate && python generate_dashboard_html.py
+
+# 3. Commit and push
+cd ~/anki-portuguese-sayings
+git add . && git commit -m "Your changes" && git push
+```
+
+**If scripts seem outdated:**
+```bash
+~/anki-portuguese-sayings/deploy.sh
+```
+
+---
+
 ## 🎙️ Capture Shortcut (Voice or Type)
 
 This Shortcut is your single capture UI on **iPhone**, **iPad**, and **Mac**.
